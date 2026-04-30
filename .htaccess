@@ -1,0 +1,12 @@
+Options -MultiViews
+RewriteEngine On
+
+# API routing
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^api/(.*)$ api.php?request=$1 [QSA,L]
+
+# Frontend SPA routing
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.html [L]

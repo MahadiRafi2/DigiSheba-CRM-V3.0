@@ -2,7 +2,6 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
-import mysql from "mysql2/promise";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
@@ -15,18 +14,7 @@ const __dirname = path.dirname(__filename);
 
 const JWT_SECRET = process.env.JWT_SECRET || "super-secret-key";
 
-// Database Connection
-const dbConfig = {
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'digiseller_db',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
-};
-
-const pool = mysql.createPool(dbConfig);
+import pool from "./db";
 
 async function initializeDatabase() {
   try {
