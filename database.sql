@@ -1,4 +1,4 @@
--- DigiSeller Database Schema for MySQL
+-- DigiSheba Database Schema for MySQL
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -164,6 +164,7 @@ CREATE TABLE IF NOT EXISTS `branding_settings` (
   `admin_logo_url` text DEFAULT NULL,
   `favicon_url` text DEFAULT NULL,
   `site_name` varchar(255) DEFAULT NULL,
+  `show_floating_login` tinyint(1) DEFAULT 1,
   PRIMARY KEY (`user_id`),
   CONSTRAINT `branding_settings_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

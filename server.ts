@@ -174,9 +174,15 @@ async function initializeDatabase() {
         admin_logo_url TEXT,
         favicon_url TEXT,
         site_name VARCHAR(255),
+        show_floating_login TINYINT(1) DEFAULT 1,
         FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
       );
     `);
+
+    // Ensure show_floating_login column exists
+    try {
+      await pool.query(`ALTER TABLE branding_settings ADD COLUMN show_floating_login TINYINT(1) DEFAULT 1`);
+    } catch (e) {}
 
     // Ensure columns for Canva settings (incremental updates)
     const columns = [
@@ -603,7 +609,7 @@ async function startServer() {
       }
 
       transporter.sendMail({
-        from: `"${smtp.from_name || 'DigiSeller'}" <${smtp.from_email || smtp.user}>`,
+        from: `"${smtp.from_name || 'DigiSheba'}" <${smtp.from_email || smtp.user}>`,
         to: sale.email,
         subject: subject || `Order ${status}`,
         text: body || `Your order for ${sale.product_name} has been ${status}.`,
@@ -816,20 +822,27 @@ async function startServer() {
   // Branding Settings
   app.get("/api/settings/branding", authenticate, async (req: any, res) => {
     const [rows]: any = await pool.query("SELECT * FROM branding_settings WHERE user_id = ?", [req.user.id]);
-    res.json(rows[0] || { logo_url: '', admin_logo_url: '', favicon_url: '', site_name: 'DigiSeller' });
+    res.json(rows[0] || { 
+      logo_url: '', 
+      admin_logo_url: '', 
+      favicon_url: '', 
+      site_name: 'DigiSheba',
+      show_floating_login: 1
+    });
   });
 
   app.post("/api/settings/branding", authenticate, async (req: any, res) => {
-    const { logo_url, admin_logo_url, favicon_url, site_name } = req.body;
+    const { logo_url, admin_logo_url, favicon_url, site_name, show_floating_login } = req.body;
     await pool.query(`
-      INSERT INTO branding_settings (user_id, logo_url, admin_logo_url, favicon_url, site_name)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO branding_settings (user_id, logo_url, admin_logo_url, favicon_url, site_name, show_floating_login)
+      VALUES (?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE 
         logo_url = VALUES(logo_url),
         admin_logo_url = VALUES(admin_logo_url),
         favicon_url = VALUES(favicon_url),
-        site_name = VALUES(site_name)
-    `, [req.user.id, logo_url, admin_logo_url, favicon_url, site_name || 'DigiSeller']);
+        site_name = VALUES(site_name),
+        show_floating_login = VALUES(show_floating_login)
+    `, [req.user.id, logo_url, admin_logo_url, favicon_url, site_name || 'DigiSheba', show_floating_login ? 1 : 0]);
     res.json({ success: true });
   });
 
@@ -1061,10 +1074,10 @@ async function startServer() {
   // Public Branding (for Landing Page - fetching from first admin)
   app.get("/api/public/branding", async (req, res) => {
     const [uRows]: any = await pool.query("SELECT id FROM users ORDER BY id ASC LIMIT 1");
-    if (uRows.length === 0) return res.json({ site_name: 'DigiSeller' });
+    if (uRows.length === 0) return res.json({ site_name: 'DigiSheba', show_floating_login: 1 });
     
     const [rows]: any = await pool.query("SELECT * FROM branding_settings WHERE user_id = ?", [uRows[0].id]);
-    res.json(rows[0] || { site_name: 'DigiSeller' });
+    res.json(rows[0] || { site_name: 'DigiSheba', show_floating_login: 1 });
   });
 
   // Enhanced Stats

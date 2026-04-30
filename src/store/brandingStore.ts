@@ -5,16 +5,18 @@ interface BrandingState {
   adminLogoUrl: string;
   faviconUrl: string;
   siteName: string;
+  showFloatingLogin: boolean;
   loading: boolean;
   fetchBranding: () => Promise<void>;
-  updateBranding: (data: { logo_url: string; admin_logo_url: string; favicon_url: string; site_name: string }) => void;
+  updateBranding: (data: { logo_url: string; admin_logo_url: string; favicon_url: string; site_name: string; show_floating_login: number }) => void;
 }
 
 export const useBrandingStore = create<BrandingState>((set) => ({
   logoUrl: '',
   adminLogoUrl: '',
   faviconUrl: '',
-  siteName: 'DigiSeller',
+  siteName: 'DigiSheba',
+  showFloatingLogin: true,
   loading: true,
   fetchBranding: async () => {
     try {
@@ -24,7 +26,8 @@ export const useBrandingStore = create<BrandingState>((set) => ({
         logoUrl: data.logo_url || '', 
         adminLogoUrl: data.admin_logo_url || '',
         faviconUrl: data.favicon_url || '', 
-        siteName: data.site_name || 'DigiSeller',
+        siteName: data.site_name || 'DigiSheba',
+        showFloatingLogin: data.show_floating_login !== 0,
         loading: false 
       });
       
@@ -48,7 +51,8 @@ export const useBrandingStore = create<BrandingState>((set) => ({
       logoUrl: data.logo_url, 
       adminLogoUrl: data.admin_logo_url,
       faviconUrl: data.favicon_url, 
-      siteName: data.site_name 
+      siteName: data.site_name,
+      showFloatingLogin: data.show_floating_login !== 0
     });
     if (data.site_name) document.title = data.site_name;
   }

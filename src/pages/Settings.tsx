@@ -46,7 +46,8 @@ export default function Settings() {
     logo_url: '',
     admin_logo_url: '',
     favicon_url: '',
-    site_name: 'DigiSeller'
+    site_name: 'DigiSheba',
+    show_floating_login: 1
   });
 
   useEffect(() => {
@@ -80,7 +81,10 @@ export default function Settings() {
     .then(res => res.json())
     .then(data => {
       if (data) {
-        setBranding(data);
+        setBranding({
+          ...data,
+          show_floating_login: data.show_floating_login ?? 1
+        });
       }
     });
 
@@ -419,7 +423,7 @@ export default function Settings() {
                 <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider block">Site Name</label>
                 <input 
                   type="text" 
-                  placeholder="DigiSeller"
+                  placeholder="DigiSheba"
                   className="w-full px-4 py-3 rounded-xl border border-zinc-200 outline-none focus:ring-2 focus:ring-purple-500 font-bold"
                   value={branding.site_name}
                   onChange={e => setBranding({...branding, site_name: e.target.value})}
@@ -470,6 +474,20 @@ export default function Settings() {
                     onChange={e => setBranding({...branding, favicon_url: e.target.value})}
                   />
                   <p className="text-[10px] text-zinc-400">Recommended size: 32x32px or 64x64px.</p>
+                </div>
+
+                <div className="pt-4 flex items-center justify-between p-4 bg-purple-50/50 rounded-2xl border border-purple-100">
+                  <div className="space-y-0.5">
+                    <label className="text-sm font-bold text-purple-900">Floating Admin Login</label>
+                    <p className="text-xs text-purple-600">Show a floating login button on the home page for quick access.</p>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={() => setBranding({...branding, show_floating_login: branding.show_floating_login ? 0 : 1})}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${branding.show_floating_login ? 'bg-purple-600' : 'bg-zinc-200'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${branding.show_floating_login ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
                 </div>
               </div>
             </div>
