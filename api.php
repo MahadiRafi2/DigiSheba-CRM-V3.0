@@ -106,7 +106,7 @@ switch (true) {
         echo json_encode($stmt->fetchAll());
         break;
 
-    // Branding
+    // Public Branding
     case ($request === 'public/branding' && $method === 'GET'):
         $stmt = $db->query("SELECT * FROM users ORDER BY id ASC LIMIT 1");
         $u = $stmt->fetch();
@@ -118,40 +118,6 @@ switch (true) {
         $stmt->execute([$u['id']]);
         $res = $stmt->fetch();
         echo json_encode($res ?: ['site_name' => 'DigiSheba', 'show_floating_login' => 1]);
-        break;
-
-    case ($request === 'settings/branding' && $method === 'GET'):
-        $user = getAuthUser();
-        if (!$user) { http_response_code(401); exit; }
-        $stmt = $db->prepare("SELECT * FROM branding_settings WHERE user_id = ?");
-        $stmt->execute([$user['id']]);
-        $res = $stmt->fetch();
-        echo json_encode($res ?: ['site_name' => 'DigiSheba', 'show_floating_login' => 1]);
-        break;
-
-    case ($request === 'settings/branding' && $method === 'POST'):
-        $user = getAuthUser();
-        if (!$user) { http_response_code(401); exit; }
-        $data = json_decode(file_get_contents('php://input'), true);
-        $stmt = $db->prepare("
-            INSERT INTO branding_settings (user_id, logo_url, admin_logo_url, favicon_url, site_name, show_floating_login)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE 
-                logo_url = VALUES(logo_url),
-                admin_logo_url = VALUES(admin_logo_url),
-                favicon_url = VALUES(favicon_url),
-                site_name = VALUES(site_name),
-                show_floating_login = VALUES(show_floating_login)
-        ");
-        $stmt->execute([
-            $user['id'], 
-            $data['logo_url'], 
-            $data['admin_logo_url'], 
-            $data['favicon_url'], 
-            $data['site_name'], 
-            $data['show_floating_login']
-        ]);
-        echo json_encode(['success' => true]);
         break;
 
     // Handle other routes or 404

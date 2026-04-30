@@ -24,7 +24,7 @@ export default function Login() {
       const data = await res.json();
       if (res.ok) {
         setAuth(data.user, data.token);
-        navigate('/');
+        navigate('/admin');
       } else {
         setError(data.error);
       }
@@ -90,12 +90,6 @@ export default function Login() {
               Sign In
             </button>
           </form>
-
-          <div className="mt-8 pt-8 border-t border-zinc-100 text-center">
-            <p className="text-sm text-zinc-500">
-              Don't have an account? <button onClick={() => navigate('/register')} className="text-emerald-600 font-semibold hover:underline">Create one</button>
-            </p>
-          </div>
         </div>
       </div>
     </div>

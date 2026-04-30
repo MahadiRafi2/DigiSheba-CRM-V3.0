@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Package, Mail, User, Phone, CheckCircle, ArrowRight, Zap, Shield } from 'lucide-react';
 import { Product } from '../types';
 import { useBrandingStore } from '../store/brandingStore';
+import { useAuthStore } from '../store/authStore';
 
 function FeatureCard({ icon: Icon, title, desc }: { icon: any, title: string, desc: string }) {
   return (
@@ -19,6 +20,7 @@ function FeatureCard({ icon: Icon, title, desc }: { icon: any, title: string, de
 export default function Landing() {
   const navigate = useNavigate();
   const { siteName, logoUrl, showFloatingLogin } = useBrandingStore();
+  const token = useAuthStore(state => state.token);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
@@ -267,9 +269,9 @@ export default function Landing() {
       {/* Floating Admin Login Button */}
       {showFloatingLogin && (
         <button 
-          onClick={() => navigate('/login')}
+          onClick={() => navigate(token ? '/admin' : '/login')}
           className="fixed bottom-8 right-8 w-14 h-14 bg-zinc-900 text-white rounded-full flex items-center justify-center shadow-2xl hover:scale-110 transition-all z-50 group overflow-hidden"
-          title="Admin Login"
+          title={token ? "Admin Dashboard" : "Admin Login"}
         >
           <div className="absolute inset-0 bg-gradient-to-tr from-purple-600/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <Shield size={24} className="group-hover:rotate-12 transition-transform" />

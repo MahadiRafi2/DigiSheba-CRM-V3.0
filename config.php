@@ -1,9 +1,9 @@
 <?php
 // Database Configuration
 define('DB_HOST', 'localhost');
-define('DB_USER', 'root'); // cPanel-এ আপনার ডেটাবেজ ইউজারনেম দিন
-define('DB_PASS', '');     // cPanel-এ আপনার ডেটাবেজ পাসওয়ার্ড দিন
-define('DB_NAME', 'digisheba_db'); // cPanel-এ আপনার ডেটাবেজ নাম দিন
+define('DB_USER', 'futureba_DigiShebaCRMUser'); // cPanel-এ আপনার ডেটাবেজ ইউজারনেম দিন
+define('DB_PASS', 'SmjZB2.wD7)Q1G&T');     // cPanel-এ আপনার ডেটাবেজ পাসওয়ার্ড দিন
+define('DB_NAME', 'futureba_DigiShebaCRM'); // cPanel-এ আপনার ডেটাবেজ নাম দিন
 
 // JWT Secret
 define('JWT_SECRET', 'super-secret-key');

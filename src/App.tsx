@@ -14,7 +14,6 @@ import EmailCampaign from './pages/EmailCampaign';
 import Landing from './pages/Landing';
 import TrackOrder from './pages/TrackOrder';
 import Login from './pages/Login';
-import Register from './pages/Register';
 import CanvaRenewal from './pages/CanvaRenewal';
 import AdminCanvaRenewal from './pages/AdminCanvaRenewal';
 
@@ -38,7 +37,6 @@ export default function App() {
         <Route path="/track" element={<TrackOrder />} />
         <Route path="/canva-renewal" element={<CanvaRenewal />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
         
         <Route path="/admin" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />

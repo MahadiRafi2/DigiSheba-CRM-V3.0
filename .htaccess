@@ -1,7 +1,12 @@
 Options -MultiViews
 RewriteEngine On
 
-# API routing
+# Admin API routing
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^admin/api/(.*)$ admin.php?request=$1 [QSA,L]
+
+# General API routing
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^api/(.*)$ api.php?request=$1 [QSA,L]
