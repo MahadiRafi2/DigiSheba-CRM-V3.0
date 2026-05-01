@@ -5,18 +5,6 @@ import { Product } from '../types';
 import { useBrandingStore } from '../store/brandingStore';
 import { useAuthStore } from '../store/authStore';
 
-function FeatureCard({ icon: Icon, title, desc }: { icon: any, title: string, desc: string }) {
-  return (
-    <div className="p-8 bg-white rounded-3xl border border-zinc-100 hover:shadow-xl hover:shadow-purple-100/50 transition-all">
-      <div className="w-14 h-14 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mb-6">
-        {Icon && <Icon size={28} />}
-      </div>
-      <h4 className="text-xl font-bold text-zinc-900 mb-2">{title}</h4>
-      <p className="text-zinc-500 leading-relaxed">{desc}</p>
-    </div>
-  );
-}
-
 export default function Landing() {
   const navigate = useNavigate();
   const { siteName, logoUrl, showFloatingLogin } = useBrandingStore();
@@ -92,9 +80,9 @@ export default function Landing() {
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="lg:h-screen lg:overflow-hidden bg-white flex flex-col">
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-md sticky top-0 z-50 border-b border-zinc-100">
+      <header className="bg-white/80 backdrop-blur-md sticky top-0 z-50 border-b border-zinc-100 flex-shrink-0">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {logoUrl ? (
@@ -126,7 +114,7 @@ export default function Landing() {
       </header>
 
       {/* Hero */}
-      <section className="py-20 lg:py-32 px-6">
+      <section className="flex-grow flex items-center py-12 lg:py-0 px-6 overflow-y-auto lg:overflow-hidden">
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
           <div className="space-y-8">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-50 text-purple-600 rounded-full text-sm font-bold tracking-wide uppercase">
@@ -237,32 +225,6 @@ export default function Landing() {
               </form>
             )}
           </div>
-        </div>
-      </section>
-
-      {/* Features */}
-      <section className="py-24 bg-zinc-50">
-        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-12">
-          <FeatureCard 
-            icon={Package} 
-            title="Instant Access" 
-            desc="Get your digital keys or login credentials instantly after payment approval."
-          />
-          <FeatureCard 
-            icon={Zap} 
-            title="Canva Pro Renewal" 
-            desc="Renew your existing Canva Pro account easily. Submit your request and get back to work in minutes."
-          />
-          <FeatureCard 
-            icon={Mail} 
-            title="Auto Reminders" 
-            desc="Never lose access. We'll remind you via email before your subscription expires."
-          />
-          <FeatureCard 
-            icon={User} 
-            title="Expert Support" 
-            desc="Our team is available 24/7 to help you with any issues or questions."
-          />
         </div>
       </section>
 

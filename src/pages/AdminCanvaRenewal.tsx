@@ -19,6 +19,7 @@ import {
   Filter,
   Edit,
   ExternalLink,
+  Loader2,
   Image as ImageIcon
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -86,9 +87,11 @@ export default function AdminCanvaRenewal() {
       ]);
       const ordersData = await ordersRes.json();
       const settingsData = await settingsRes.json();
-      setOrders(ordersData);
+      setOrders(Array.isArray(ordersData) ? ordersData : []);
       setSettings({
         ...settingsData,
+        packages: Array.isArray(settingsData.packages) ? settingsData.packages : [],
+        payment_info: settingsData.payment_info || { bkash: '', nagad: '', rocket: '' },
         banner_url: settingsData.banner_url || 'https://images.unsplash.com/photo-1626785774573-4b799315345d?q=80&w=2071&auto=format&fit=crop',
         page_title: settingsData.page_title || 'Canva Pro Lifetime Renewal',
         page_description: settingsData.page_description || 'আপনার বর্তমান ক্যানভা প্রো একাউন্টটি পুনরায় সচল করুন খুব সহজেই। প্রিমিয়াম সকল ফিচার ব্যবহার করুন আনলিমিটেড।'
@@ -217,6 +220,14 @@ export default function AdminCanvaRenewal() {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, filterStatus]);
+
+  if (loading) {
+    return (
+      <div className="min-h-[400px] flex items-center justify-center">
+        <Loader2 className="animate-spin text-zinc-900" size={32} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">

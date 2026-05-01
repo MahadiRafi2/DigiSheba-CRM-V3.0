@@ -67,13 +67,7 @@ export default function TrackOrder() {
   return (
     <div className="min-h-screen bg-zinc-50 pb-20">
       <header className="bg-white/80 backdrop-blur-md sticky top-0 z-50 border-b border-zinc-200">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
-          <button 
-            onClick={() => navigate('/')} 
-            className="text-zinc-600 hover:text-purple-600 flex items-center gap-1.5 sm:gap-2 font-bold transition-colors text-sm sm:text-base"
-          >
-            <ArrowLeft size={18} /> <span className="hidden xs:inline">Back Home</span><span className="xs:hidden">Back</span>
-          </button>
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-center">
           <div className="flex items-center gap-2 sm:gap-3">
             {logoUrl ? (
               <img src={logoUrl} alt={siteName} className="h-8 sm:h-10 w-auto object-contain" />

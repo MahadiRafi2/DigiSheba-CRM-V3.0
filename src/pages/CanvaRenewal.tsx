@@ -76,20 +76,25 @@ export default function CanvaRenewal() {
     fetch('/api/public/canva-renewal/settings')
       .then(res => res.json())
       .then(data => {
-        setSettings({
+        const safeData = {
           ...data,
-          banner_url: data.banner_url || 'https://images.unsplash.com/photo-1626785774573-4b799315345d?q=80&w=2071&auto=format&fit=crop',
-          page_title: data.page_title || 'Canva Pro Lifetime Renewal',
-          page_description: data.page_description || 'আপনার বর্তমান ক্যানভা প্রো একাউন্টটি পুনরায় সচল করুন খুব সহজেই। প্রিমিয়াম সকল ফিচার ব্যবহার করুন আনলিমিটেড।',
-          bkash_logo: data.bkash_logo || 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR0Nl_p-C7QeO-o_R-U8P8a7Gv2u6v4-U7f8w&s',
-          nagad_logo: data.nagad_logo || 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT6l6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6A&s',
-          rocket_logo: data.rocket_logo || 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT-Gv-C7QeO-o_R-U8P8a7Gv2u6v4-U7f8w&s'
+          packages: Array.isArray(data.packages) ? data.packages : [],
+          payment_info: data.payment_info || {}
+        };
+        setSettings({
+          ...safeData,
+          banner_url: safeData.banner_url || 'https://images.unsplash.com/photo-1626785774573-4b799315345d?q=80&w=2071&auto=format&fit=crop',
+          page_title: safeData.page_title || 'Canva Pro Lifetime Renewal',
+          page_description: safeData.page_description || 'আপনার বর্তমান ক্যানভা প্রো একাউন্টটি পুনরায় সচল করুন খুব সহজেই। প্রিমিয়াম সকল ফিচার ব্যবহার করুন আনলিমিটেড।',
+          bkash_logo: safeData.bkash_logo || 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR0Nl_p-C7QeO-o_R-U8P8a7Gv2u6v4-U7f8w&s',
+          nagad_logo: safeData.nagad_logo || 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT6l6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6L6A&s',
+          rocket_logo: safeData.rocket_logo || 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT-Gv-C7QeO-o_R-U8P8a7Gv2u6v4-U7f8w&s'
         });
-        if (data.packages.length > 0) {
+        if (safeData.packages.length > 0) {
           setFormData(prev => ({
             ...prev,
-            package_name: data.packages[0].name,
-            price: data.packages[0].price
+            package_name: safeData.packages[0].name,
+            price: safeData.packages[0].price
           }));
         }
       });
@@ -177,14 +182,6 @@ export default function CanvaRenewal() {
             alt={settings.page_title} 
             className="w-full h-full object-cover"
           />
-          <div className="absolute top-4 left-4">
-            <button 
-              onClick={() => navigate('/')}
-              className="w-10 h-10 bg-white shadow-lg rounded-full flex items-center justify-center text-zinc-900 active:scale-90 transition-all"
-            >
-              <ChevronLeft size={24} />
-            </button>
-          </div>
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
             {[1, 2, 3, 4].map((i) => (
               <div key={i} className={`w-2 h-2 rounded-full ${i === 1 ? 'bg-zinc-900 w-4' : 'bg-zinc-300'}`} />

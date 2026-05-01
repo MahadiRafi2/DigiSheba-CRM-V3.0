@@ -787,16 +787,53 @@ async function startServer() {
     }
   });
 
-  // Email Templates
-  app.get("/api/settings/templates", authenticate, async (req: any, res) => {
-    const [rows]: any = await pool.query("SELECT * FROM global_templates WHERE user_id = ?", [req.user.id]);
-    const templates = rows[0];
-    res.json(templates || {
-      approved_subject: "Order Approved!",
-      approved_body: "Hi {customer_name},\n\nYour order for {product_name} has been approved.\n\nThank you!",
-      rejected_subject: "Order Rejected",
-      rejected_body: "Hi {customer_name},\n\nSorry, your order for {product_name} was rejected."
-    });
+  // Admin Canva Renewal
+  app.get("/api/admin/canva-renewal/orders", authenticate, async (req: any, res) => {
+    const [rows]: any = await pool.query("SELECT * FROM canva_renewal_orders ORDER BY created_at DESC");
+    res.json(rows);
+  });
+
+  app.get("/api/admin/canva-renewal/settings", authenticate, async (req: any, res) => {
+    const [rows]: any = await pool.query("SELECT * FROM canva_renewal_settings WHERE user_id = ?", [req.user.id]);
+    const settings = rows[0] || {};
+    if (settings.packages) settings.packages = JSON.parse(settings.packages);
+    if (settings.payment_info) settings.payment_info = JSON.parse(settings.payment_info);
+    res.json(settings);
+  });
+
+  app.post("/api/admin/canva-renewal/settings", authenticate, async (req: any, res) => {
+    const { packages, payment_info, banner_url, page_title, page_description, bkash_logo, nagad_logo, rocket_logo, redirect_url, approval_email_template, rejection_email_template, approval_email_subject, rejection_email_subject } = req.body;
+    await pool.query(`
+      INSERT INTO canva_renewal_settings 
+      (user_id, packages, payment_info, banner_url, page_title, page_description, bkash_logo, nagad_logo, rocket_logo, redirect_url, approval_email_template, rejection_email_template, approval_email_subject, rejection_email_subject)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE 
+        packages=VALUES(packages), payment_info=VALUES(payment_info), banner_url=VALUES(banner_url), 
+        page_title=VALUES(page_title), page_description=VALUES(page_description),
+        bkash_logo=VALUES(bkash_logo), nagad_logo=VALUES(nagad_logo), rocket_logo=VALUES(rocket_logo),
+        redirect_url=VALUES(redirect_url), approval_email_template=VALUES(approval_email_template),
+        rejection_email_template=VALUES(rejection_email_template), 
+        approval_email_subject=VALUES(approval_email_subject), rejection_email_subject=VALUES(rejection_email_subject)
+    `, [req.user.id, JSON.stringify(packages), JSON.stringify(payment_info), banner_url, page_title, page_description, bkash_logo, nagad_logo, rocket_logo, redirect_url, approval_email_template, rejection_email_template, approval_email_subject, rejection_email_subject]);
+    res.json({ success: true });
+  });
+
+  app.patch("/api/admin/canva-renewal/orders/:id/status", authenticate, async (req: any, res) => {
+    const { status } = req.body;
+    await pool.query("UPDATE canva_renewal_orders SET status = ? WHERE id = ?", [status, req.params.id]);
+    res.json({ success: true });
+  });
+
+  app.patch("/api/admin/canva-renewal/orders/:id", authenticate, async (req: any, res) => {
+    const { name, phone, email, package_name, price, sender_number, transaction_id } = req.body;
+    await pool.query("UPDATE canva_renewal_orders SET name=?, phone=?, email=?, package_name=?, price=?, sender_number=?, transaction_id=? WHERE id=?", 
+      [name, phone, email, package_name, price, sender_number, transaction_id, req.params.id]);
+    res.json({ success: true });
+  });
+
+  app.delete("/api/admin/canva-renewal/orders/:id", authenticate, async (req: any, res) => {
+    await pool.query("DELETE FROM canva_renewal_orders WHERE id = ?", [req.params.id]);
+    res.json({ success: true });
   });
 
   app.post("/api/settings/templates", authenticate, async (req: any, res) => {
