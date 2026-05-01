@@ -489,23 +489,34 @@ async function startServer() {
 
   // Sale Status update
   app.post("/api/public/orders", async (req, res) => {
-    const { name, email, phone, product_id, amount, payment_method } = req.body;
-    
-    // Find the first admin user to assign these public orders to
-    const [uRows]: any = await pool.query("SELECT id FROM users ORDER BY id ASC LIMIT 1");
-    const adminUser = uRows[0];
-    if (!adminUser) return res.status(500).json({ error: "System not ready" });
+    try {
+      const { name, email, phone, product_id, amount, payment_method } = req.body;
+      
+      // Find the user who actually has products to assign the order to
+      const [pUserRows]: any = await pool.query(`
+        SELECT DISTINCT user_id FROM products 
+        ORDER BY user_id ASC LIMIT 1
+      `);
+      
+      let adminId;
+      if (pUserRows.length > 0) {
+        adminId = pUserRows[0].user_id;
+      } else {
+        const [uRows]: any = await pool.query("SELECT id FROM users ORDER BY id ASC LIMIT 1");
+        if (uRows.length === 0) return res.status(500).json({ error: "System not ready" });
+        adminId = uRows[0].id;
+      }
 
-    // Handle Customer
-    let [cRows]: any = await pool.query("SELECT id FROM customers WHERE email = ? AND user_id = ?", [email, adminUser.id]);
-    let customerId;
-    if (cRows.length > 0) {
-      customerId = cRows[0].id;
-    } else {
-      const [cResult]: any = await pool.query("INSERT INTO customers (user_id, name, email, phone, source) VALUES (?, ?, ?, ?, ?)",
-        [adminUser.id, name, email, phone, 'Landing Page']);
-      customerId = cResult.insertId;
-    }
+      // Handle Customer
+      let [cRows]: any = await pool.query("SELECT id FROM customers WHERE email = ? AND user_id = ?", [email, adminId]);
+      let customerId;
+      if (cRows.length > 0) {
+        customerId = cRows[0].id;
+      } else {
+        const [cResult]: any = await pool.query("INSERT INTO customers (user_id, name, email, phone, source) VALUES (?, ?, ?, ?, ?)",
+          [adminId, name, email, phone, 'Landing Page']);
+        customerId = cResult.insertId;
+      }
 
     const [pRows]: any = await pool.query("SELECT * FROM products WHERE id = ?", [product_id]);
     const product = pRows[0];
@@ -600,13 +611,29 @@ async function startServer() {
 
   // Public Products
   app.get("/api/public/products", async (req, res) => {
-    // Find the first admin user to show their products on landing page
-    const [uRows]: any = await pool.query("SELECT id FROM users ORDER BY id ASC LIMIT 1");
-    const adminUser = uRows[0];
-    if (!adminUser) return res.json([]);
-    
-    const [products]: any = await pool.query("SELECT * FROM products WHERE user_id = ?", [adminUser.id]);
-    res.json(products);
+    try {
+      // Find the first user who actually has products. 
+      // This is the most reliable way to show products on the landing page in a multi-tenant environment without custom domains.
+      const [pRows]: any = await pool.query(`
+        SELECT DISTINCT user_id FROM products 
+        ORDER BY user_id ASC LIMIT 1
+      `);
+      
+      let userId;
+      if (pRows.length > 0) {
+        userId = pRows[0].user_id;
+      } else {
+        const [uRows]: any = await pool.query("SELECT id FROM users ORDER BY id ASC LIMIT 1");
+        if (uRows.length === 0) return res.json([]);
+        userId = uRows[0].id;
+      }
+      
+      const [products]: any = await pool.query("SELECT * FROM products WHERE user_id = ?", [userId]);
+      res.json(products);
+    } catch (error) {
+      console.error("Public products fetch error:", error);
+      res.status(500).json({ error: "Failed to fetch products" });
+    }
   });
 
   // Update Sale Status
@@ -930,52 +957,85 @@ async function startServer() {
 
   // Canva Renewal Public
   app.get("/api/public/canva-renewal/settings", async (req, res) => {
-    const [uRows]: any = await pool.query("SELECT id FROM users LIMIT 1");
-    if (uRows.length === 0) return res.status(404).json({ error: "System not ready" });
-    const adminId = uRows[0].id;
-    const [sRows]: any = await pool.query("SELECT * FROM canva_renewal_settings WHERE user_id = ?", [adminId]);
-    const settings = sRows[0];
-    
-    res.json(settings ? {
-      packages: JSON.parse(settings.packages || '[]'),
-      payment_info: JSON.parse(settings.payment_info || '{}'),
-      banner_url: settings.banner_url,
-      page_title: settings.page_title,
-      page_description: settings.page_description,
-      bkash_logo: settings.bkash_logo,
-      nagad_logo: settings.nagad_logo,
-      rocket_logo: settings.rocket_logo,
-      redirect_url: settings.redirect_url,
-    } : {
-      packages: [
-        { name: '1 Month', price: 99 },
-        { name: '6 Month', price: 499 },
-        { name: '1 Year', price: 899 },
-        { name: 'Lifetime', price: 1499 }
-      ],
-      payment_info: { bkash: '01XXXXXXXXX', nagad: '01XXXXXXXXX', rocket: '01XXXXXXXXX' },
-      banner_url: '',
-      page_title: '',
-      page_description: '',
-      bkash_logo: '',
-      nagad_logo: '',
-      rocket_logo: '',
-      redirect_url: '',
-    });
+    try {
+      const [uRows]: any = await pool.query(`
+        SELECT user_id FROM canva_renewal_settings 
+        WHERE packages IS NOT NULL AND packages != '[]'
+        LIMIT 1
+      `);
+      
+      let adminId;
+      if (uRows.length > 0) {
+        adminId = uRows[0].user_id;
+      } else {
+        const [firstUser]: any = await pool.query("SELECT id FROM users ORDER BY id ASC LIMIT 1");
+        if (firstUser.length === 0) return res.status(404).json({ error: "System not ready" });
+        adminId = firstUser[0].id;
+      }
+
+      const [sRows]: any = await pool.query("SELECT * FROM canva_renewal_settings WHERE user_id = ?", [adminId]);
+      const settings = sRows[0];
+      
+      res.json(settings ? {
+        packages: JSON.parse(settings.packages || '[]'),
+        payment_info: JSON.parse(settings.payment_info || '{}'),
+        banner_url: settings.banner_url,
+        page_title: settings.page_title,
+        page_description: settings.page_description,
+        bkash_logo: settings.bkash_logo,
+        nagad_logo: settings.nagad_logo,
+        rocket_logo: settings.rocket_logo,
+        redirect_url: settings.redirect_url,
+      } : {
+        packages: [
+          { name: '1 Month', price: 99 },
+          { name: '6 Month', price: 499 },
+          { name: '1 Year', price: 899 },
+          { name: 'Lifetime', price: 1499 }
+        ],
+        payment_info: { bkash: '01XXXXXXXXX', nagad: '01XXXXXXXXX', rocket: '01XXXXXXXXX' },
+        banner_url: '',
+        page_title: '',
+        page_description: '',
+        bkash_logo: '',
+        nagad_logo: '',
+        rocket_logo: '',
+        redirect_url: '',
+      });
+    } catch (e) {
+      console.error("Canva settings fetch error:", e);
+      res.json({ packages: [], payment_info: {} });
+    }
   });
 
   app.post("/api/public/canva-renewal/orders", async (req, res) => {
-    const { name, phone, email, package_name, price, payment_method, sender_number, transaction_id } = req.body;
-    const [uRows]: any = await pool.query("SELECT id FROM users LIMIT 1");
-    if (uRows.length === 0) return res.status(404).json({ error: "System not ready" });
-    const adminId = uRows[0].id;
+    try {
+      const { name, phone, email, package_name, price, payment_method, sender_number, transaction_id } = req.body;
+      const [uRows]: any = await pool.query(`
+        SELECT user_id FROM canva_renewal_settings 
+        WHERE packages IS NOT NULL AND packages != '[]'
+        LIMIT 1
+      `);
+      
+      let adminId;
+      if (uRows.length > 0) {
+        adminId = uRows[0].user_id;
+      } else {
+        const [firstUser]: any = await pool.query("SELECT id FROM users ORDER BY id ASC LIMIT 1");
+        if (firstUser.length === 0) return res.status(404).json({ error: "System not ready" });
+        adminId = firstUser[0].id;
+      }
 
-    const [result]: any = await pool.query(`
-      INSERT INTO canva_renewal_orders (user_id, name, phone, email, package_name, price, payment_method, sender_number, transaction_id, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [adminId, name, phone, email, package_name, price, payment_method, sender_number, transaction_id, new Date()]);
+      const [result]: any = await pool.query(`
+        INSERT INTO canva_renewal_orders (user_id, name, phone, email, package_name, price, payment_method, sender_number, transaction_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [adminId, name, phone, email, package_name, price, payment_method, sender_number, transaction_id, new Date()]);
 
-    res.json({ success: true, id: result.insertId });
+      res.json({ success: true, id: result.insertId });
+    } catch (err: any) {
+      console.error("Canva renewal order error:", err);
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // Canva Renewal Admin
@@ -1153,13 +1213,35 @@ async function startServer() {
     }
   });
 
-  // Public Branding (for Landing Page - fetching from first admin)
+  // Public Branding (for Landing Page)
   app.get("/api/public/branding", async (req, res) => {
-    const [uRows]: any = await pool.query("SELECT id FROM users ORDER BY id ASC LIMIT 1");
-    if (uRows.length === 0) return res.json({ site_name: 'DigiSheba', show_floating_login: 1 });
-    
-    const [rows]: any = await pool.query("SELECT * FROM branding_settings WHERE user_id = ?", [uRows[0].id]);
-    res.json(rows[0] || { site_name: 'DigiSheba', show_floating_login: 1 });
+    try {
+      // Find the first user who has custom branding, or fallback to the first user with products
+      const [bRows]: any = await pool.query(`
+        SELECT user_id FROM branding_settings 
+        WHERE site_name IS NOT NULL AND site_name != 'DigiSheba'
+        LIMIT 1
+      `);
+      
+      let userId;
+      if (bRows.length > 0) {
+        userId = bRows[0].user_id;
+      } else {
+        const [pRows]: any = await pool.query("SELECT DISTINCT user_id FROM products LIMIT 1");
+        if (pRows.length > 0) {
+          userId = pRows[0].user_id;
+        } else {
+          const [uRows]: any = await pool.query("SELECT id FROM users ORDER BY id ASC LIMIT 1");
+          if (uRows.length === 0) return res.json({ site_name: 'DigiSheba', show_floating_login: 1 });
+          userId = uRows[0].id;
+        }
+      }
+      
+      const [rows]: any = await pool.query("SELECT * FROM branding_settings WHERE user_id = ?", [userId]);
+      res.json(rows[0] || { site_name: 'DigiSheba', show_floating_login: 1 });
+    } catch (error) {
+      res.json({ site_name: 'DigiSheba', show_floating_login: 1 });
+    }
   });
 
   // Enhanced Stats
@@ -1204,6 +1286,34 @@ async function startServer() {
         secure=VALUES(secure)
     `, [req.user.id, host, port, user, pass, from_email, from_name, secure ? 1 : 0]);
     res.json({ success: true });
+  });
+
+  app.post("/api/settings/smtp/test", authenticate, async (req: any, res) => {
+    const { host, port, user, pass, from_email, from_name, secure, email } = req.body;
+    
+    try {
+      const transporter = nodemailer.createTransport({
+        host,
+        port: parseInt(port),
+        secure: secure === 1 || secure === true,
+        auth: { user, pass },
+      });
+
+      await transporter.verify();
+      
+      await transporter.sendMail({
+        from: `"${from_name || 'SMTP Test'}" <${from_email || user}>`,
+        to: email || user,
+        subject: "SMTP Connection Test",
+        text: "Your SMTP settings are working correctly!",
+        html: "<b>Your SMTP settings are working correctly!</b>",
+      });
+
+      res.json({ success: true, message: "Test email sent successfully!" });
+    } catch (err: any) {
+      console.error("SMTP Test Error:", err);
+      res.status(500).json({ error: "SMTP test failed", details: err.message });
+    }
   });
 
   // Product Email Templates

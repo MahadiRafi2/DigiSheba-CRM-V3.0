@@ -223,7 +223,7 @@ export default function Settings() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ email: testEmail, site_name: branding.site_name })
+        body: JSON.stringify({ ...smtp, email: testEmail, site_name: branding.site_name })
       });
       
       const contentType = res.headers.get("content-type");
