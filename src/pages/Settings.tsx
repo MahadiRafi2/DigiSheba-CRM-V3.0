@@ -226,22 +226,25 @@ export default function Settings() {
         body: JSON.stringify({ ...smtp, email: testEmail, site_name: branding.site_name })
       });
       
+      let data;
       const contentType = res.headers.get("content-type");
       if (contentType && contentType.includes("application/json")) {
-        const data = await res.json();
-        if (res.ok) {
-          alert('Test email sent successfully! Please check your inbox.');
-        } else {
-          alert(`SMTP Error: ${data.error || 'Failed to send'}\nDetails: ${data.details || 'No details provided'}`);
-        }
+        data = await res.json();
+      }
+
+      if (res.ok) {
+        alert('Test email sent successfully! Please check your inbox.');
       } else {
-        const text = await res.text();
-        console.error("Non-JSON Response Payload:", text);
-        alert(`Server returned non-JSON error (${res.status}): ${text.substring(0, 500)}`);
+        if (data) {
+          alert(`SMTP Test Failed:\nError: ${data.error}\nDetails: ${data.details || 'No additional details'}\nCode: ${data.code || 'N/A'}`);
+        } else {
+          const text = await res.text();
+          alert(`Server Error (${res.status}): ${text.substring(0, 200)}`);
+        }
       }
     } catch (err: any) {
-      console.error("Fetch/JSON Error:", err);
-      alert(`Connection Error: ${err.message}`);
+      console.error("SMTP Test Exception:", err);
+      alert(`Connection Failed: ${err.message}\nThis might be due to a network timeout or server crash. Please verify your SMTP settings.`);
     }
     setTestingSmtp(false);
   };

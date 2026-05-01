@@ -165,11 +165,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               )}>
                 Database: {dbStatus}
               </span>
-              <Database size={12} className={cn(
-                dbStatus === 'connected' ? "text-emerald-500" : 
-                dbStatus === 'disconnected' ? "text-red-500" : 
-                "text-zinc-400"
-              )} />
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  checkDbStatus();
+                }}
+                className={cn(
+                  "p-1 hover:bg-zinc-200/50 rounded transition-all",
+                  dbStatus === 'loading' && "animate-spin"
+                )}
+                title="Refresh Status"
+              >
+                <RefreshCw size={12} className={cn(
+                  dbStatus === 'connected' ? "text-emerald-500" : 
+                  dbStatus === 'disconnected' ? "text-red-500" : 
+                  "text-zinc-400"
+                )} />
+              </button>
             </div>
 
             <button className="p-2 text-zinc-500 hover:text-zinc-900 transition-colors">

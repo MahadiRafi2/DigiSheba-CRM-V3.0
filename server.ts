@@ -292,14 +292,26 @@ async function startServer() {
 
   app.get("/api/db-status", async (req, res) => {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
     try {
       const startTime = Date.now();
+      // Ensure the pool is connected and can run a query
       await pool.query("SELECT 1");
       const latency = Date.now() - startTime;
-      res.json({ status: "connected", latency: `${latency}ms` });
+      res.json({ 
+        status: "connected", 
+        latency: `${latency}ms`, 
+        timestamp: new Date().toISOString(),
+        host: process.env.DB_HOST || 'localhost' 
+      });
     } catch (err: any) {
       console.error("DB Status Check Error:", err);
-      res.status(500).json({ status: "disconnected", error: err.message });
+      res.status(500).json({ 
+        status: "disconnected", 
+        error: err.message, 
+        code: err.code,
+        timestamp: new Date().toISOString() 
+      });
     }
   });
 
@@ -625,8 +637,8 @@ async function startServer() {
   // Public Products
   app.get("/api/public/products", async (req, res) => {
     try {
+      console.log("Fetching public products...");
       // Find the first user who actually has products. 
-      // This is the most reliable way to show products on the landing page in a multi-tenant environment without custom domains.
       const [pRows]: any = await pool.query(`
         SELECT DISTINCT user_id FROM products 
         ORDER BY user_id ASC LIMIT 1
@@ -635,17 +647,23 @@ async function startServer() {
       let userId;
       if (pRows.length > 0) {
         userId = pRows[0].user_id;
+        console.log("Found user with products:", userId);
       } else {
+        console.log("No users with products found, checking for any user...");
         const [uRows]: any = await pool.query("SELECT id FROM users ORDER BY id ASC LIMIT 1");
-        if (uRows.length === 0) return res.json([]);
+        if (uRows.length === 0) {
+          console.log("No users at all found.");
+          return res.json([]);
+        }
         userId = uRows[0].id;
       }
       
       const [products]: any = await pool.query("SELECT * FROM products WHERE user_id = ?", [userId]);
+      console.log(`Returning ${products.length} products for user ${userId}`);
       res.json(products);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Public products fetch error:", error);
-      res.status(500).json({ error: "Failed to fetch products" });
+      res.status(500).json({ error: "Failed to fetch products", details: error.message });
     }
   });
 
@@ -1303,47 +1321,71 @@ async function startServer() {
 
   app.post("/api/settings/smtp/test", authenticate, async (req: any, res) => {
     const { host, port, user, pass, from_email, from_name, secure, email } = req.body;
-    console.log("SMTP Test Request Body:", { host, port, user, pass: pass ? '***' : null, from_email, from_name, secure, email });
+    console.log("SMTP Test Initiated:", { host, port, user, from_email, email });
     
+    // Ensure we don't hang the request forever
+    let isFinished = false;
+    const timeout = setTimeout(() => {
+      if (!isFinished) {
+        isFinished = true;
+        console.error("SMTP Test Timed Out after 20s");
+        res.status(504).json({ error: "SMTP Timeout", details: "The email server took too long to respond. Please check your host and port settings." });
+      }
+    }, 20000);
+
     try {
       if (!host || !port || !user || !pass) {
+        clearTimeout(timeout);
+        isFinished = true;
         return res.status(400).json({ error: "Missing required SMTP parameters" });
       }
 
-      const transporter = nodemailer.createTransport({
+      const transportOptions: any = {
         host,
         port: parseInt(port as string),
         secure: secure === 1 || secure === true || secure === "1" || secure === "true",
         auth: { user, pass },
-        // Add timeout to prevent hanging
-        connectTimeout: 10000,
-        greetingTimeout: 5000,
-        socketTimeout: 10000,
-      });
+        tls: { rejectUnauthorized: false },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
+      };
 
-      console.log("Verifying SMTP connection...");
+      if (host.toLowerCase().includes('gmail')) transportOptions.service = 'gmail';
+
+      const transporter = nodemailer.createTransport(transportOptions);
+
+      console.log("Verifying connection...");
       await transporter.verify();
-      console.log("SMTP connection verified successfully.");
       
-      console.log("Sending test email to:", email || user);
+      console.log("Connection verified. Sending test email...");
       await transporter.sendMail({
         from: `"${from_name || 'SMTP Test'}" <${from_email || user}>`,
         to: email || user,
         subject: "SMTP Connection Test",
-        text: "Your SMTP settings are working correctly!",
-        html: "<b>Your SMTP settings are working correctly!</b>",
+        text: "Your SMTP settings are working correctly! This is a test email from your CRM.",
+        html: "<b>Your SMTP settings are working correctly!</b><p>This is a test email sent to verify your CRM configuration.</p>",
       });
-      console.log("Test email sent.");
 
-      res.json({ success: true, message: "Test email sent successfully!" });
+      console.log("SMTP Test Successful");
+      if (!isFinished) {
+        clearTimeout(timeout);
+        isFinished = true;
+        res.json({ success: true, message: "Test email sent successfully!" });
+      }
     } catch (err: any) {
-      console.error("SMTP Test Error Details:", err);
-      res.status(500).json({ 
-        error: "SMTP test failed", 
-        details: err.message,
-        code: err.code,
-        command: err.command
-      });
+      console.error("SMTP Deep Error:", err);
+      if (!isFinished) {
+        clearTimeout(timeout);
+        isFinished = true;
+        res.status(500).json({ 
+          error: "SMTP test failed", 
+          details: err.message,
+          code: err.code,
+          command: err.command,
+          stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+        });
+      }
     }
   });
 
