@@ -57,6 +57,11 @@ export default function Dashboard() {
   };
 
   if (!stats) return <div className="p-8">Loading dashboard...</div>;
+  if (stats.error) return <div className="p-8 text-red-500">Error: {stats.error}</div>;
+
+  const profit = stats.profit || 0;
+  const lifetime = stats.lifetime || 0;
+  const customersCount = stats.customers || 0;
 
   return (
     <div className="space-y-8">
@@ -71,11 +76,11 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-        <StatCard title="Daily" value={`৳${stats.daily}`} color="purple" icon={TrendingUp} />
-        <StatCard title="Weekly" value={`৳${stats.weekly}`} color="blue" icon={TrendingUp} />
-        <StatCard title="Monthly" value={`৳${stats.monthly}`} color="emerald" icon={TrendingUp} />
-        <StatCard title="Yearly" value={`৳${stats.yearly}`} color="amber" icon={TrendingUp} />
-        <StatCard title="Lifetime" value={`৳${stats.lifetime}`} color="zinc" icon={BarChart3} />
+        <StatCard title="Daily" value={`৳${stats.daily || 0}`} color="purple" icon={TrendingUp} />
+        <StatCard title="Weekly" value={`৳${stats.weekly || 0}`} color="blue" icon={TrendingUp} />
+        <StatCard title="Monthly" value={`৳${stats.monthly || 0}`} color="emerald" icon={TrendingUp} />
+        <StatCard title="Yearly" value={`৳${stats.yearly || 0}`} color="amber" icon={TrendingUp} />
+        <StatCard title="Lifetime" value={`৳${lifetime}`} color="zinc" icon={BarChart3} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -104,7 +109,9 @@ export default function Dashboard() {
                     <tr key={order.id} className="hover:bg-zinc-50/50 transition-colors">
                       <td className="px-6 py-4">
                         <p className="text-sm font-bold text-zinc-900">{order.customer_name}</p>
-                        <p className="text-[10px] text-zinc-400 font-medium">{format(new Date(order.date), 'dd MMM, HH:mm')}</p>
+                        <p className="text-[10px] text-zinc-400 font-medium">
+                          {order.date ? format(new Date(order.date), 'dd MMM, HH:mm') : 'N/A'}
+                        </p>
                       </td>
                       <td className="px-6 py-4">
                         <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-zinc-100 text-zinc-600">
@@ -157,15 +164,15 @@ export default function Dashboard() {
           <div className="bg-zinc-900 p-8 rounded-[2.5rem] text-white overflow-hidden relative group">
             <div className="absolute -right-8 -top-8 w-32 h-32 bg-purple-500/20 rounded-full blur-3xl group-hover:bg-purple-500/30 transition-all" />
             <h3 className="text-zinc-400 text-[10px] font-bold uppercase tracking-widest mb-2">Total Profit</h3>
-            <p className="text-4xl font-bold">৳{stats.profit.toLocaleString()}</p>
+            <p className="text-4xl font-bold">৳{profit.toLocaleString()}</p>
             <div className="mt-8 pt-6 border-t border-zinc-800 flex items-center justify-between">
               <div>
                 <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Customers</p>
-                <p className="text-lg font-bold text-blue-400">{stats.customers}</p>
+                <p className="text-lg font-bold text-blue-400">{customersCount}</p>
               </div>
               <div className="text-right">
                 <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Margins</p>
-                <p className="text-lg font-bold text-emerald-400">{stats.lifetime > 0 ? ((stats.profit / stats.lifetime) * 100).toFixed(1) : 0}%</p>
+                <p className="text-lg font-bold text-emerald-400">{lifetime > 0 ? ((profit / lifetime) * 100).toFixed(1) : 0}%</p>
               </div>
             </div>
           </div>

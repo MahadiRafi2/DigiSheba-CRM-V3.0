@@ -3,6 +3,9 @@ header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Cache-Control: post-check=0, pre-check=0', false);
+header('Pragma: no-cache');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit;
 
@@ -51,6 +54,25 @@ switch (true) {
             'profit' => (float)($sales['profit'] ?? 0),
             'customers' => (int)($customers['count'] ?? 0),
             'pendingOrders' => (int)($pending['count'] ?? 0)
+        ]);
+        break;
+
+    // Enhanced Stats
+    case ($request === 'enhanced-stats' && $method === 'GET'):
+        $fetchStat = function($query, $uId) use ($db) {
+            $stmt = $db->prepare($query);
+            $stmt->execute([$uId]);
+            return (float)($stmt->fetchColumn() ?: 0);
+        };
+
+        echo json_encode([
+            'daily' => $fetchStat("SELECT SUM(amount) FROM sales WHERE user_id = ? AND status = 'Approved' AND date >= CURDATE()", $user['id']),
+            'weekly' => $fetchStat("SELECT SUM(amount) FROM sales WHERE user_id = ? AND status = 'Approved' AND date >= DATE_SUB(NOW(), INTERVAL 7 DAY)", $user['id']),
+            'monthly' => $fetchStat("SELECT SUM(amount) FROM sales WHERE user_id = ? AND status = 'Approved' AND date >= DATE_SUB(NOW(), INTERVAL 30 DAY)", $user['id']),
+            'yearly' => $fetchStat("SELECT SUM(amount) FROM sales WHERE user_id = ? AND status = 'Approved' AND date >= DATE_SUB(NOW(), INTERVAL 365 DAY)", $user['id']),
+            'lifetime' => $fetchStat("SELECT SUM(amount) FROM sales WHERE user_id = ? AND status = 'Approved'", $user['id']),
+            'profit' => $fetchStat("SELECT SUM(profit) FROM sales WHERE user_id = ? AND status = 'Approved'", $user['id']),
+            'customers' => (int)$fetchStat("SELECT COUNT(*) FROM customers WHERE user_id = ?", $user['id'])
         ]);
         break;
 
