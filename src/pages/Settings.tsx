@@ -219,7 +219,7 @@ export default function Settings() {
     try {
       const res = await fetch('/api/settings/smtp/test', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
@@ -227,24 +227,22 @@ export default function Settings() {
       });
       
       let data;
-      const contentType = res.headers.get("content-type");
-      if (contentType && contentType.includes("application/json")) {
-        data = await res.json();
+      const text = await res.text();
+      try {
+        data = JSON.parse(text);
+      } catch (parseErr) {
+        console.error("Failed to parse server response as JSON:", text);
+        data = { error: "Server returned invalid response", details: text.substring(0, 500) };
       }
 
       if (res.ok) {
         alert('Test email sent successfully! Please check your inbox.');
       } else {
-        if (data) {
-          alert(`SMTP Test Failed:\nError: ${data.error}\nDetails: ${data.details || 'No additional details'}\nCode: ${data.code || 'N/A'}`);
-        } else {
-          const text = await res.text();
-          alert(`Server Error (${res.status}): ${text.substring(0, 200)}`);
-        }
+        alert(`SMTP Test Failed:\nError: ${data.error || 'Unknown'}\nDetails: ${data.details || 'No additional details'}\nCode: ${data.code || 'N/A'}`);
       }
     } catch (err: any) {
-      console.error("SMTP Test Exception:", err);
-      alert(`Connection Failed: ${err.message}\nThis might be due to a network timeout or server crash. Please verify your SMTP settings.`);
+      console.error("SMTP Test Connection Exception:", err);
+      alert(`Connection Error: ${err.message}\nCould not reach the server. Please check your internet or try again later.`);
     }
     setTestingSmtp(false);
   };

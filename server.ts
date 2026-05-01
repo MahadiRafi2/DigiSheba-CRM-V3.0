@@ -1321,70 +1321,57 @@ async function startServer() {
 
   app.post("/api/settings/smtp/test", authenticate, async (req: any, res) => {
     const { host, port, user, pass, from_email, from_name, secure, email } = req.body;
-    console.log("SMTP Test Initiated:", { host, port, user, from_email, email });
+    console.log("SMTP Test - Request Received");
     
-    // Ensure we don't hang the request forever
-    let isFinished = false;
-    const timeout = setTimeout(() => {
-      if (!isFinished) {
-        isFinished = true;
-        console.error("SMTP Test Timed Out after 20s");
-        res.status(504).json({ error: "SMTP Timeout", details: "The email server took too long to respond. Please check your host and port settings." });
-      }
-    }, 20000);
-
+    let transporter: any = null;
     try {
       if (!host || !port || !user || !pass) {
-        clearTimeout(timeout);
-        isFinished = true;
         return res.status(400).json({ error: "Missing required SMTP parameters" });
       }
 
       const transportOptions: any = {
-        host,
+        host: host.trim(),
         port: parseInt(port as string),
         secure: secure === 1 || secure === true || secure === "1" || secure === "true",
-        auth: { user, pass },
+        auth: { user: user.trim(), pass: pass.trim() },
         tls: { rejectUnauthorized: false },
-        connectionTimeout: 10000,
+        connectionTimeout: 10000, // 10 seconds
         greetingTimeout: 10000,
         socketTimeout: 15000,
       };
 
-      if (host.toLowerCase().includes('gmail')) transportOptions.service = 'gmail';
+      if (host.toLowerCase().includes('gmail')) {
+        transportOptions.service = 'gmail';
+      }
 
-      const transporter = nodemailer.createTransport(transportOptions);
+      transporter = nodemailer.createTransport(transportOptions);
 
-      console.log("Verifying connection...");
+      console.log("SMTP Test - Verifying Connection...");
       await transporter.verify();
       
-      console.log("Connection verified. Sending test email...");
+      console.log("SMTP Test - Connection OK. Sending Email...");
       await transporter.sendMail({
         from: `"${from_name || 'SMTP Test'}" <${from_email || user}>`,
-        to: email || user,
-        subject: "SMTP Connection Test",
-        text: "Your SMTP settings are working correctly! This is a test email from your CRM.",
-        html: "<b>Your SMTP settings are working correctly!</b><p>This is a test email sent to verify your CRM configuration.</p>",
+        to: (email || user).trim(),
+        subject: "SMTP Connection Test Success",
+        text: "Congratulations! Your SMTP settings are working perfectly.",
+        html: "<b>Congratulations!</b><p>Your SMTP settings are working perfectly. This is a test email sent from your CRM system.</p>",
       });
 
-      console.log("SMTP Test Successful");
-      if (!isFinished) {
-        clearTimeout(timeout);
-        isFinished = true;
-        res.json({ success: true, message: "Test email sent successfully!" });
-      }
+      console.log("SMTP Test - Completed Successfully");
+      return res.json({ success: true, message: "Test email sent successfully!" });
+
     } catch (err: any) {
-      console.error("SMTP Deep Error:", err);
-      if (!isFinished) {
-        clearTimeout(timeout);
-        isFinished = true;
-        res.status(500).json({ 
-          error: "SMTP test failed", 
-          details: err.message,
-          code: err.code,
-          command: err.command,
-          stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
-        });
+      console.error("SMTP TEST CATASTROPHIC ERROR:", err);
+      // Ensure we always return JSON
+      return res.status(500).json({ 
+        error: "SMTP test failed", 
+        details: err.message || "Unknown error occurred",
+        code: err.code || "N/A"
+      });
+    } finally {
+      if (transporter && typeof transporter.close === 'function') {
+        transporter.close();
       }
     }
   });
