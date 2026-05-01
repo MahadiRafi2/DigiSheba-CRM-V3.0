@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuthStore } from '../store/authStore';
-import { Mail, Save, Shield, Server, User, Send, RefreshCw, AlertCircle, Users, Trash2, Plus, Key, ShieldCheck } from 'lucide-react';
+import { Mail, Save, Shield, Server, User, Send, RefreshCw, AlertCircle, Users, Trash2, Plus, Key, ShieldCheck, Loader2 } from 'lucide-react';
 import { useBrandingStore } from '../store/brandingStore';
 
 export default function Settings() {
@@ -42,6 +42,8 @@ export default function Settings() {
     rejected_subject: '',
     rejected_body: ''
   });
+  const [testEmail, setTestEmail] = useState('');
+  const [testingSmtp, setTestingSmtp] = useState(false);
   const [branding, setBranding] = useState({
     logo_url: '',
     admin_logo_url: '',
@@ -208,6 +210,33 @@ export default function Settings() {
     setSaving(false);
   };
 
+  const handleTestSmtp = async () => {
+    if (!testEmail) {
+      alert('Please enter a test email address');
+      return;
+    }
+    setTestingSmtp(true);
+    try {
+      const res = await fetch('/api/settings/smtp/test', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ email: testEmail, site_name: branding.site_name })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert('Test email sent successfully! Please check your inbox.');
+      } else {
+        alert(data.error || 'Failed to send test email.');
+      }
+    } catch (err) {
+      alert('An error occurred while testing SMTP.');
+    }
+    setTestingSmtp(false);
+  };
+
   const handleDeleteUser = async (id: number) => {
     if (!confirm('Are you sure you want to remove this user?')) return;
     try {
@@ -338,6 +367,34 @@ export default function Settings() {
             <button type="submit" disabled={saving} className="bg-zinc-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-zinc-800 transition-colors flex items-center gap-2">
               <Save size={20} /> Save SMTP
             </button>
+
+            <div className="mt-8 pt-8 border-t border-zinc-100">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                  <Send size={18} />
+                </div>
+                <h3 className="font-bold text-zinc-900">Test SMTP Settings</h3>
+              </div>
+              <p className="text-xs text-zinc-500 mb-4">Enter an email address to send a test message using your saved SMTP configurations.</p>
+              <div className="flex gap-3">
+                <input 
+                  type="email" 
+                  placeholder="test@example.com"
+                  className="flex-grow px-4 py-2.5 rounded-xl border border-zinc-200 outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                  value={testEmail}
+                  onChange={e => setTestEmail(e.target.value)}
+                />
+                <button 
+                  type="button"
+                  onClick={handleTestSmtp}
+                  disabled={testingSmtp}
+                  className="bg-white border border-zinc-200 text-zinc-900 px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-zinc-50 transition-colors flex items-center gap-2"
+                >
+                  {testingSmtp ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
+                  Test Now
+                </button>
+              </div>
+            </div>
           </form>
         ) : activeTab === 'woo' ? (
           <form onSubmit={handleSave} className="p-8 space-y-6">

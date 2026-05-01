@@ -121,12 +121,42 @@ if ($userCount == 0) {
 
 // Helper to get Auth User
 function getAuthUser() {
-    $headers = apache_request_headers();
-    $auth = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+    $auth = '';
+    if (isset($_SERVER['HTTP_AUTHORIZATION'])) {
+        $auth = $_SERVER['HTTP_AUTHORIZATION'];
+    } elseif (isset($_SERVER['Authorization'])) {
+        $auth = $_SERVER['Authorization'];
+    } elseif (function_exists('apache_request_headers')) {
+        $headers = apache_request_headers();
+        $auth = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+    }
+    
     if (preg_match('/Bearer\s(\S+)/', $auth, $matches)) {
         return JWT::decode($matches[1], JWT_SECRET);
     }
     return null;
+}
+
+function sendOrderEmail($db, $userId, $toEmail, $subject, $body) {
+    $stmt = $db->prepare("SELECT * FROM smtp_settings WHERE user_id = ?");
+    $stmt->execute([$userId]);
+    $smtp = $stmt->fetch();
+    
+    if (!$smtp) return false;
+
+    $headers = "MIME-Version: 1.0" . "\r\n";
+    $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+    $from = $smtp['from_name'] . ' <' . $smtp['from_email'] . '>';
+    $headers .= 'From: ' . $from . "\r\n";
+    $headers .= 'Reply-To: ' . $smtp['from_email'] . "\r\n";
+    $headers .= 'X-Mailer: PHP/' . phpversion();
+    
+    // Convert newlines to <br> if it's plain text being sent as HTML
+    if (strip_tags($body) === $body) {
+        $body = nl2br($body);
+    }
+    
+    return @mail($toEmail, $subject, $body, $headers);
 }
 
 // Simple Router
@@ -239,16 +269,21 @@ switch (true) {
     case ($request === 'sales' && $method === 'GET'):
         $user = getAuthUser();
         if (!$user) { http_response_code(401); exit; }
-        $stmt = $db->prepare("
-            SELECT s.*, c.name as customer_name, c.email, c.phone, p.name as product_name 
-            FROM sales s
-            JOIN customers c ON s.customer_id = c.id
-            JOIN products p ON s.product_id = p.id
-            WHERE s.user_id = ?
-            ORDER BY s.date DESC
-        ");
-        $stmt->execute([$user['id']]);
-        echo json_encode($stmt->fetchAll());
+        try {
+            $stmt = $db->prepare("
+                SELECT s.*, c.name as customer_name, c.email, c.phone, p.name as product_name 
+                FROM sales s
+                LEFT JOIN customers c ON s.customer_id = c.id
+                LEFT JOIN products p ON s.product_id = p.id
+                WHERE s.user_id = ?
+                ORDER BY s.date DESC
+            ");
+            $stmt->execute([$user['id']]);
+            echo json_encode($stmt->fetchAll());
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
         break;
 
     case ($method === 'PATCH' && preg_match('/^sales\/(\d+)\/status$/', $request, $matches)):
@@ -256,9 +291,47 @@ switch (true) {
         if (!$user) { http_response_code(401); exit; }
         $orderId = $matches[1];
         $data = json_decode(file_get_contents('php://input'), true);
-        $stmt = $db->prepare("UPDATE sales SET status = ? WHERE id = ? AND user_id = ?");
-        $stmt->execute([$data['status'], $orderId, $user['id']]);
-        echo json_encode(['success' => true]);
+        $status = $data['status'];
+        
+        try {
+            $stmt = $db->prepare("UPDATE sales SET status = ? WHERE id = ? AND user_id = ?");
+            $stmt->execute([$status, $orderId, $user['id']]);
+
+            // Sending Email if status is Approved or Rejected
+            if ($status === 'Approved' || $status === 'Rejected') {
+                // Fetch sale details
+                $stmt = $db->prepare("
+                    SELECT s.*, c.email, c.name as customer_name, p.name as product_name 
+                    FROM sales s 
+                    JOIN customers c ON s.customer_id = c.id 
+                    JOIN products p ON s.product_id = p.id 
+                    WHERE s.id = ?
+                ");
+                $stmt->execute([$orderId]);
+                $sale = $stmt->fetch();
+
+                if ($sale) {
+                    // Fetch template (Global templates are on user_id 1)
+                    $stmt = $db->prepare("SELECT * FROM global_templates WHERE user_id = 1");
+                    $stmt->execute();
+                    $template = $stmt->fetch();
+
+                    if ($template) {
+                        $subject = ($status === 'Approved') ? ($template['approved_subject'] ?? 'Order Approved') : ($template['rejected_subject'] ?? 'Order Rejected');
+                        $body = ($status === 'Approved') ? ($template['approved_body'] ?? '') : ($template['rejected_body'] ?? '');
+
+                        $body = str_replace(['{customer_name}', '{product_name}'], [$sale['customer_name'] ?? 'Customer', $sale['product_name'] ?? 'Product'], $body);
+                        
+                        // User ID 1 is where SMTP settings are stored
+                        sendOrderEmail($db, 1, $sale['email'], $subject, $body);
+                    }
+                }
+            }
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
         break;
 
     case ($request === 'sales' && $method === 'POST'):
@@ -311,8 +384,8 @@ switch (true) {
     case ($request === 'settings/branding' && $method === 'GET'):
         $user = getAuthUser();
         if (!$user) { http_response_code(401); exit; }
-        $stmt = $db->prepare("SELECT * FROM branding_settings WHERE user_id = ?");
-        $stmt->execute([$user['id']]);
+        $stmt = $db->prepare("SELECT * FROM branding_settings WHERE user_id = 1");
+        $stmt->execute();
         $res = $stmt->fetch();
         echo json_encode($res ?: ['site_name' => 'DigiSheba', 'show_floating_login' => 1]);
         break;
@@ -321,32 +394,68 @@ switch (true) {
         $user = getAuthUser();
         if (!$user) { http_response_code(401); exit; }
         $data = json_decode(file_get_contents('php://input'), true);
-        $stmt = $db->prepare("
-            INSERT INTO branding_settings (user_id, logo_url, admin_logo_url, favicon_url, site_name, show_floating_login)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE 
-                logo_url = VALUES(logo_url),
-                admin_logo_url = VALUES(admin_logo_url),
-                favicon_url = VALUES(favicon_url),
-                site_name = VALUES(site_name),
-                show_floating_login = VALUES(show_floating_login)
-        ");
-        $stmt->execute([
-            $user['id'], 
-            $data['logo_url'], 
-            $data['admin_logo_url'], 
-            $data['favicon_url'], 
-            $data['site_name'], 
-            $data['show_floating_login']
-        ]);
-        echo json_encode(['success' => true]);
+        
+        // Use a fixed ID or first admin for global branding to ensure consistency
+        // In this app, site-wide branding should be consistent across all admins
+        $targetUserId = 1; 
+
+        try {
+            $stmt = $db->prepare("
+                INSERT INTO branding_settings (user_id, logo_url, admin_logo_url, favicon_url, site_name, show_floating_login)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE 
+                    logo_url = VALUES(logo_url),
+                    admin_logo_url = VALUES(admin_logo_url),
+                    favicon_url = VALUES(favicon_url),
+                    site_name = VALUES(site_name),
+                    show_floating_login = VALUES(show_floating_login)
+            ");
+            $stmt->execute([
+                $targetUserId,
+                $data['logo_url'] ?? '', 
+                $data['admin_logo_url'] ?? '', 
+                $data['favicon_url'] ?? '', 
+                $data['site_name'] ?? 'DigiSheba', 
+                isset($data['show_floating_login']) ? (int)$data['show_floating_login'] : 1
+            ]);
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+        break;
+
+    case ($request === 'settings/smtp/test' && $method === 'POST'):
+        $user = getAuthUser();
+        if (!$user) { http_response_code(401); exit; }
+        $data = json_decode(file_get_contents('php://input'), true);
+        $testEmail = $data['email'] ?? '';
+        
+        if (empty($testEmail)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Test email is required']);
+            exit;
+        }
+
+        $subject = "SMTP Test Email - " . (isset($data['site_name']) ? $data['site_name'] : 'DigiSheba');
+        $body = "Congratulations! Your SMTP settings are working correctly.\n\nDate: " . date('Y-m-d H:i:s');
+        
+        // We use the settings stored in user ID 1 for global SMTP
+        $success = sendOrderEmail($db, 1, $testEmail, $subject, $body);
+        
+        if ($success) {
+            echo json_encode(['success' => true]);
+        } else {
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to send test email. Check your SMTP settings and server mail configuration.']);
+        }
         break;
 
     case ($request === 'settings/smtp' && $method === 'GET'):
         $user = getAuthUser();
         if (!$user) { http_response_code(401); exit; }
-        $stmt = $db->prepare("SELECT * FROM smtp_settings WHERE user_id = ?");
-        $stmt->execute([$user['id']]);
+        $stmt = $db->prepare("SELECT * FROM smtp_settings WHERE user_id = 1");
+        $stmt->execute();
         echo json_encode($stmt->fetch() ?: (object)[]);
         break;
 
@@ -354,22 +463,35 @@ switch (true) {
         $user = getAuthUser();
         if (!$user) { http_response_code(401); exit; }
         $data = json_decode(file_get_contents('php://input'), true);
-        $stmt = $db->prepare("
-            INSERT INTO smtp_settings (user_id, host, port, user, pass, from_email, from_name, secure)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE 
-                host=VALUES(host), port=VALUES(port), user=VALUES(user), pass=VALUES(pass), 
-                from_email=VALUES(from_email), from_name=VALUES(from_name), secure=VALUES(secure)
-        ");
-        $stmt->execute([$user['id'], $data['host'], $data['port'], $data['user'], $data['pass'], $data['from_email'], $data['from_name'], $data['secure'] ? 1 : 0]);
-        echo json_encode(['success' => true]);
+        try {
+            $stmt = $db->prepare("
+                INSERT INTO smtp_settings (user_id, host, port, user, pass, from_email, from_name, secure)
+                VALUES (1, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE 
+                    host=VALUES(host), port=VALUES(port), user=VALUES(user), pass=VALUES(pass), 
+                    from_email=VALUES(from_email), from_name=VALUES(from_name), secure=VALUES(secure)
+            ");
+            $stmt->execute([
+                $data['host'] ?? '', 
+                $data['port'] ?? 587, 
+                $data['user'] ?? '', 
+                $data['pass'] ?? '', 
+                $data['from_email'] ?? '', 
+                $data['from_name'] ?? '', 
+                isset($data['secure']) ? ($data['secure'] ? 1 : 0) : 1
+            ]);
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
         break;
 
     case ($request === 'settings/templates' && $method === 'GET'):
         $user = getAuthUser();
         if (!$user) { http_response_code(401); exit; }
-        $stmt = $db->prepare("SELECT * FROM global_templates WHERE user_id = ?");
-        $stmt->execute([$user['id']]);
+        $stmt = $db->prepare("SELECT * FROM global_templates WHERE user_id = 1");
+        $stmt->execute();
         echo json_encode($stmt->fetch() ?: [
             'approved_subject' => 'Order Approved!',
             'approved_body' => "Hi {customer_name},\n\nYour order for {product_name} has been approved.",
@@ -382,15 +504,25 @@ switch (true) {
         $user = getAuthUser();
         if (!$user) { http_response_code(401); exit; }
         $data = json_decode(file_get_contents('php://input'), true);
-        $stmt = $db->prepare("
-            INSERT INTO global_templates (user_id, approved_subject, approved_body, rejected_subject, rejected_body)
-            VALUES (?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE 
-                approved_subject=VALUES(approved_subject), approved_body=VALUES(approved_body),
-                rejected_subject=VALUES(rejected_subject), rejected_body=VALUES(rejected_body)
-        ");
-        $stmt->execute([$user['id'], $data['approved_subject'], $data['approved_body'], $data['rejected_subject'], $data['rejected_body']]);
-        echo json_encode(['success' => true]);
+        try {
+            $stmt = $db->prepare("
+                INSERT INTO global_templates (user_id, approved_subject, approved_body, rejected_subject, rejected_body)
+                VALUES (1, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE 
+                    approved_subject=VALUES(approved_subject), approved_body=VALUES(approved_body),
+                    rejected_subject=VALUES(rejected_subject), rejected_body=VALUES(rejected_body)
+            ");
+            $stmt->execute([
+                $data['approved_subject'] ?? '', 
+                $data['approved_body'] ?? '', 
+                $data['rejected_subject'] ?? '', 
+                $data['rejected_body'] ?? ''
+            ]);
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
         break;
 
     case ($request === 'settings/woo' && $method === 'POST'):
@@ -518,8 +650,8 @@ switch (true) {
     case ($request === 'admin/canva-renewal/settings' && $method === 'GET'):
         $user = getAuthUser();
         if (!$user) { http_response_code(401); exit; }
-        $stmt = $db->prepare("SELECT * FROM canva_renewal_settings WHERE user_id = ?");
-        $stmt->execute([$user['id']]);
+        $stmt = $db->prepare("SELECT * FROM canva_renewal_settings WHERE user_id = 1");
+        $stmt->execute();
         $settings = $stmt->fetch();
         if ($settings) {
             $settings['packages'] = json_decode($settings['packages'] ?: '[]', true);
@@ -548,28 +680,44 @@ switch (true) {
         $user = getAuthUser();
         if (!$user) { http_response_code(401); exit; }
         $data = json_decode(file_get_contents('php://input'), true);
-        $stmt = $db->prepare("
-            INSERT INTO canva_renewal_settings 
-            (user_id, packages, payment_info, banner_url, page_title, page_description, bkash_logo, nagad_logo, rocket_logo, redirect_url, approval_email_template, rejection_email_template, approval_email_subject, rejection_email_subject)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE 
-                packages=VALUES(packages), payment_info=VALUES(payment_info), banner_url=VALUES(banner_url), 
-                page_title=VALUES(page_title), page_description=VALUES(page_description),
-                bkash_logo=VALUES(bkash_logo), nagad_logo=VALUES(nagad_logo), rocket_logo=VALUES(rocket_logo),
-                redirect_url=VALUES(redirect_url), approval_email_template=VALUES(approval_email_template),
-                rejection_email_template=VALUES(rejection_email_template), 
-                approval_email_subject=VALUES(approval_email_subject), rejection_email_subject=VALUES(rejection_email_subject)
-        ");
-        $stmt->execute([
-            $user['id'], 
-            json_encode($data['packages']), 
-            json_encode($data['payment_info']), 
-            $data['banner_url'], $data['page_title'], $data['page_description'], 
-            $data['bkash_logo'], $data['nagad_logo'], $data['rocket_logo'], 
-            $data['redirect_url'], $data['approval_email_template'], $data['rejection_email_template'],
-            $data['approval_email_subject'], $data['rejection_email_subject']
-        ]);
-        echo json_encode(['success' => true]);
+        
+        // Consistency: Global settings should use ID 1
+        $targetUserId = 1;
+
+        try {
+            $stmt = $db->prepare("
+                INSERT INTO canva_renewal_settings 
+                (user_id, packages, payment_info, banner_url, page_title, page_description, bkash_logo, nagad_logo, rocket_logo, redirect_url, approval_email_template, rejection_email_template, approval_email_subject, rejection_email_subject)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE 
+                    packages=VALUES(packages), payment_info=VALUES(payment_info), banner_url=VALUES(banner_url), 
+                    page_title=VALUES(page_title), page_description=VALUES(page_description),
+                    bkash_logo=VALUES(bkash_logo), nagad_logo=VALUES(nagad_logo), rocket_logo=VALUES(rocket_logo),
+                    redirect_url=VALUES(redirect_url), approval_email_template=VALUES(approval_email_template),
+                    rejection_email_template=VALUES(rejection_email_template), 
+                    approval_email_subject=VALUES(approval_email_subject), rejection_email_subject=VALUES(rejection_email_subject)
+            ");
+            $stmt->execute([
+                $targetUserId, 
+                json_encode($data['packages'] ?? []), 
+                json_encode($data['payment_info'] ?? (object)[]), 
+                $data['banner_url'] ?? '', 
+                $data['page_title'] ?? '', 
+                $data['page_description'] ?? '', 
+                $data['bkash_logo'] ?? '', 
+                $data['nagad_logo'] ?? '', 
+                $data['rocket_logo'] ?? '', 
+                $data['redirect_url'] ?? '', 
+                $data['approval_email_template'] ?? '', 
+                $data['rejection_email_template'] ?? '',
+                $data['approval_email_subject'] ?? '', 
+                $data['rejection_email_subject'] ?? ''
+            ]);
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
         break;
 
     case (preg_match('/^admin\/canva-renewal\/orders\/(\d+)\/status$/', $request, $matches) && $method === 'PATCH'):

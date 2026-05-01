@@ -27,7 +27,7 @@ export const useBrandingStore = create<BrandingState>((set) => ({
         adminLogoUrl: data.admin_logo_url || '',
         faviconUrl: data.favicon_url || '', 
         siteName: data.site_name || 'DigiSheba',
-        showFloatingLogin: data.show_floating_login !== 0,
+        showFloatingLogin: Number(data.show_floating_login) !== 0,
         loading: false 
       });
       
@@ -52,7 +52,7 @@ export const useBrandingStore = create<BrandingState>((set) => ({
       adminLogoUrl: data.admin_logo_url,
       faviconUrl: data.favicon_url, 
       siteName: data.site_name,
-      showFloatingLogin: data.show_floating_login !== 0
+      showFloatingLogin: Number(data.show_floating_login) !== 0
     });
     if (data.site_name) document.title = data.site_name;
   }

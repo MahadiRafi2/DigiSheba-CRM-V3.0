@@ -33,13 +33,13 @@ export default function Sales() {
     renewal_date: ''
   });
 
-  const filteredSales = sales.filter(sale => {
+  const filteredSales = (Array.isArray(sales) ? sales : []).filter(sale => {
     const matchesSearch = 
       sale.customer_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       sale.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       sale.phone?.includes(searchQuery) ||
       sale.product_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      sale.id.toString().includes(searchQuery);
+      sale.id?.toString().includes(searchQuery);
     
     const matchesStatus = filterStatus === 'All' || sale.status === filterStatus;
     
@@ -121,13 +121,33 @@ export default function Sales() {
   const fetchData = async () => {
     const headers = { Authorization: `Bearer ${token}` };
     
-    const [salesRes, prodRes] = await Promise.all([
-      fetch('/api/sales', { headers }),
-      fetch('/api/products', { headers })
-    ]);
-    
-    setSales(await salesRes.json());
-    setProducts(await prodRes.json());
+    try {
+      const [salesRes, prodRes] = await Promise.all([
+        fetch('/api/sales', { headers }),
+        fetch('/api/products', { headers })
+      ]);
+      
+      const salesData = await salesRes.json();
+      const productsData = await prodRes.json();
+      
+      setSales(Array.isArray(salesData) ? salesData : []);
+      setProducts(Array.isArray(productsData) ? productsData : []);
+    } catch (error) {
+      console.error("Failed to fetch data:", error);
+      setSales([]);
+      setProducts([]);
+    }
+  };
+
+  const formatDateSafely = (dateStr: string, formatStr: string) => {
+    if (!dateStr) return 'N/A';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return 'Invalid Date';
+      return format(d, formatStr);
+    } catch (e) {
+      return 'Error';
+    }
   };
 
   useEffect(() => {
@@ -407,13 +427,13 @@ export default function Sales() {
                 <tr key={sale.id} className="hover:bg-zinc-50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2 text-sm text-zinc-900 font-bold">
-                      {sale.date ? format(new Date(sale.date), 'dd MMM, yy') : 'N/A'}
+                      {formatDateSafely(sale.date, 'dd MMM, yy')}
                     </div>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-2 text-sm text-zinc-900 font-bold">
-                        {sale.renewal_date ? format(new Date(sale.renewal_date), 'dd MMM, yy') : 'No Date'}
+                        {formatDateSafely(sale.renewal_date, 'dd MMM, yy')}
                       </div>
                     </div>
                   </td>
