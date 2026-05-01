@@ -19,4 +19,3 @@ class JWT {
         return json_decode(base64_decode(str_replace(['-', '_'], ['+', '/'], $payload)), true);
     }
 }
-?>

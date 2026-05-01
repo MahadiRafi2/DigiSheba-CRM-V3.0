@@ -56,6 +56,17 @@ export default function Dashboard() {
     .then(setStats);
   };
 
+  const formatDateSafely = (dateStr: string, formatStr: string) => {
+    if (!dateStr) return 'N/A';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return 'Invalid Date';
+      return format(d, formatStr);
+    } catch (e) {
+      return 'Error';
+    }
+  };
+
   if (!stats) return <div className="p-8">Loading dashboard...</div>;
   if (stats.error) return <div className="p-8 text-red-500">Error: {stats.error}</div>;
 
@@ -110,7 +121,7 @@ export default function Dashboard() {
                       <td className="px-6 py-4">
                         <p className="text-sm font-bold text-zinc-900">{order.customer_name}</p>
                         <p className="text-[10px] text-zinc-400 font-medium">
-                          {order.date ? format(new Date(order.date), 'dd MMM, HH:mm') : 'N/A'}
+                          {formatDateSafely(order.date, 'dd MMM, HH:mm')}
                         </p>
                       </td>
                       <td className="px-6 py-4">

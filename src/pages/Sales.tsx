@@ -423,7 +423,7 @@ export default function Sales() {
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">
-              {paginatedSales.length > 0 ? paginatedSales.map((sale) => (
+              {paginatedSales.length > 0 ? paginatedSales.map((sale) => sale && (
                 <tr key={sale.id} className="hover:bg-zinc-50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2 text-sm text-zinc-900 font-bold">
@@ -445,7 +445,7 @@ export default function Sales() {
                     <p className="text-sm text-zinc-600">{sale.product_name}</p>
                   </td>
                   <td className="px-6 py-4">
-                    <p className="text-sm font-bold text-zinc-900">৳{sale.amount.toFixed(2)}</p>
+                    <p className="text-sm font-bold text-zinc-900">৳{Number(sale.amount || 0).toFixed(2)}</p>
                   </td>
                   <td className="px-6 py-4">
                     <p className="text-xs text-zinc-500 font-medium">{sale.payment_method}</p>

@@ -394,7 +394,7 @@ async function startServer() {
     
     // Find or create customer
     let customerId;
-    let [rows]: any = await pool.query("SELECT id, email, phone FROM customers WHERE (email = ? AND email != '') OR (phone = ? AND phone != '') AND user_id = ?", 
+    let [rows]: any = await pool.query("SELECT id, email, phone FROM customers WHERE ((email = ? AND email != '') OR (phone = ? AND phone != '')) AND user_id = ?", 
       [email || '___none___', phone || '___none___', req.user.id]);
     
     if (rows.length > 0) {
@@ -538,55 +538,64 @@ async function startServer() {
 
   // Public Order Tracking
   app.get("/api/public/track", async (req, res) => {
-    const { email } = req.query;
-    if (!email) return res.status(400).json({ error: "Email is required" });
+    try {
+      let { email } = req.query as any;
+      if (!email) return res.status(400).json({ error: "Email is required" });
+      
+      email = email.trim();
 
-    // Fetch regular sales
-    const [sales]: any = await pool.query(`
-      SELECT 
-        s.id, 
-        s.date,
-        s.renewal_date,
-        s.status,
-        s.payment_method,
-        p.name as product_name, 
-        p.type as product_type,
-        c.name as customer_name,
-        c.phone as phone,
-        c.email as email,
-        'standard' as order_type
-      FROM sales s
-      JOIN customers c ON s.customer_id = c.id
-      JOIN products p ON s.product_id = p.id
-      WHERE c.email = ?
-      ORDER BY s.date DESC
-    `, [email]);
+      // Fetch regular sales
+      const [sales]: any = await pool.query(`
+        SELECT 
+          s.id, 
+          s.date,
+          s.renewal_date,
+          s.status,
+          s.payment_method,
+          p.name as product_name, 
+          p.type as product_type,
+          c.name as customer_name,
+          c.phone as phone,
+          c.email as email,
+          'standard' as order_type
+        FROM sales s
+        JOIN customers c ON s.customer_id = c.id
+        LEFT JOIN products p ON s.product_id = p.id
+        WHERE TRIM(LOWER(c.email)) = TRIM(LOWER(?))
+        ORDER BY s.date DESC
+      `, [email]);
 
-    // Fetch Canva renewal orders
-    const [canvaOrders]: any = await pool.query(`
-      SELECT 
-        id, 
-        created_at as date,
-        NULL as renewal_date,
-        status,
-        payment_method,
-        package_name as product_name,
-        'canva' as product_type,
-        name as customer_name,
-        phone,
-        email,
-        'canva' as order_type
-      FROM canva_renewal_orders
-      WHERE email = ?
-      ORDER BY created_at DESC
-    `, [email]);
+      // Fetch Canva renewal orders
+      const [canvaOrders]: any = await pool.query(`
+        SELECT 
+          id, 
+          created_at as date,
+          NULL as renewal_date,
+          status,
+          payment_method,
+          package_name as product_name,
+          'canva' as product_type,
+          name as customer_name,
+          phone,
+          email,
+          'canva' as order_type
+        FROM canva_renewal_orders
+        WHERE TRIM(LOWER(email)) = TRIM(LOWER(?))
+        ORDER BY created_at DESC
+      `, [email]);
 
-    // Merge and sort
-    const allOrders = [...(sales as any[]), ...(canvaOrders as any[])].sort((a, b) => 
-      new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
+      // Merge and sort
+      const allOrders = [...(sales as any[]), ...(canvaOrders as any[])].sort((a, b) => {
+        const dateA = a.date ? new Date(a.date).getTime() : 0;
+        const dateB = b.date ? new Date(b.date).getTime() : 0;
+        return dateB - dateA;
+      });
 
-    res.json(allOrders);
+      res.json(allOrders);
+    } catch (error: any) {
+      console.error("Tracking Error:", error);
+      res.status(500).json({ error: "Search failed", details: error.message });
+    }
   });
 
   // Public Products

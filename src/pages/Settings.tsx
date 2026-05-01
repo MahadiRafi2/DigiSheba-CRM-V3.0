@@ -225,14 +225,23 @@ export default function Settings() {
         },
         body: JSON.stringify({ email: testEmail, site_name: branding.site_name })
       });
-      const data = await res.json();
-      if (res.ok) {
-        alert('Test email sent successfully! Please check your inbox.');
+      
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        const data = await res.json();
+        if (res.ok) {
+          alert('Test email sent successfully! Please check your inbox.');
+        } else {
+          alert(data.error || 'Failed to send test email.');
+        }
       } else {
-        alert(data.error || 'Failed to send test email.');
+        const text = await res.text();
+        console.error("Non-JSON Response:", text);
+        alert(`Server Error: ${text.substring(0, 100)}${text.length > 100 ? '...' : ''}`);
       }
     } catch (err) {
-      alert('An error occurred while testing SMTP.');
+      console.error("SMTP Test Error:", err);
+      alert('An error occurred while testing SMTP. Please check the browser console for more details.');
     }
     setTestingSmtp(false);
   };
@@ -540,10 +549,10 @@ export default function Settings() {
                   </div>
                   <button 
                     type="button"
-                    onClick={() => setBranding({...branding, show_floating_login: branding.show_floating_login ? 0 : 1})}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${branding.show_floating_login ? 'bg-purple-600' : 'bg-zinc-200'}`}
+                    onClick={() => setBranding({...branding, show_floating_login: Number(branding.show_floating_login) ? 0 : 1})}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${Number(branding.show_floating_login) ? 'bg-purple-600' : 'bg-zinc-200'}`}
                   >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${branding.show_floating_login ? 'translate-x-6' : 'translate-x-1'}`} />
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${Number(branding.show_floating_login) ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
                 </div>
               </div>

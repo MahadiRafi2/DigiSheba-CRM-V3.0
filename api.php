@@ -1,4 +1,5 @@
 <?php
+ob_start();
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
@@ -37,15 +38,6 @@ $db->exec("CREATE TABLE IF NOT EXISTS smtp_settings (
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 )");
 
-$db->exec("CREATE TABLE IF NOT EXISTS global_templates (
-    user_id INT PRIMARY KEY,
-    approved_subject TEXT,
-    approved_body TEXT,
-    rejected_subject TEXT,
-    rejected_body TEXT,
-    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-)");
-
 $db->exec("CREATE TABLE IF NOT EXISTS branding_settings (
     user_id INT PRIMARY KEY,
     logo_url TEXT,
@@ -55,6 +47,19 @@ $db->exec("CREATE TABLE IF NOT EXISTS branding_settings (
     show_floating_login TINYINT(1) DEFAULT 1,
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 )");
+
+$db->exec("CREATE TABLE IF NOT EXISTS global_templates (
+    user_id INT PRIMARY KEY,
+    approved_subject TEXT,
+    approved_body TEXT,
+    rejected_subject TEXT,
+    rejected_body TEXT,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+)");
+
+// Initialize default settings for User ID 1 if not exists
+$db->exec("INSERT IGNORE INTO branding_settings (user_id, site_name, show_floating_login) VALUES (1, 'DigiSheba', 1)");
+$db->exec("INSERT IGNORE INTO global_templates (user_id, approved_subject, approved_body, rejected_subject, rejected_body) VALUES (1, 'Order Approved', 'Hi {customer_name}, your order for {product_name} has been approved.', 'Order Update', 'Hi {customer_name}, unfortunately we couldn\'t approve your order for {product_name}.')");
 
 $db->exec("CREATE TABLE IF NOT EXISTS woo_settings (
     user_id INT PRIMARY KEY,
@@ -142,7 +147,12 @@ function sendOrderEmail($db, $userId, $toEmail, $subject, $body) {
     $stmt->execute([$userId]);
     $smtp = $stmt->fetch();
     
-    if (!$smtp) return false;
+    if (!$smtp) {
+        // Fallback to minimal headers if no SMTP settings found
+        $headers = "MIME-Version: 1.0" . "\r\n";
+        $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+        return @mail($toEmail, $subject, $body, $headers);
+    }
 
     $headers = "MIME-Version: 1.0" . "\r\n";
     $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
@@ -156,7 +166,8 @@ function sendOrderEmail($db, $userId, $toEmail, $subject, $body) {
         $body = nl2br($body);
     }
     
-    return @mail($toEmail, $subject, $body, $headers);
+    // Adding -f parameter for better deliverability
+    return @mail($toEmail, $subject, $body, $headers, "-f " . $smtp['from_email']);
 }
 
 // Simple Router
@@ -334,6 +345,53 @@ switch (true) {
         }
         break;
 
+    case ($method === 'DELETE' && preg_match('/^products\/(\d+)$/', $request, $matches)):
+        $user = getAuthUser();
+        if (!$user) { http_response_code(401); exit; }
+        $id = $matches[1];
+        $stmt = $db->prepare("DELETE FROM products WHERE id = ? AND user_id = ?");
+        $stmt->execute([$id, $user['id']]);
+        echo json_encode(['success' => true]);
+        break;
+
+    case ($method === 'PUT' && preg_match('/^products\/(\d+)$/', $request, $matches)):
+        $user = getAuthUser();
+        if (!$user) { http_response_code(401); exit; }
+        $id = $matches[1];
+        $data = json_decode(file_get_contents('php://input'), true);
+        $stmt = $db->prepare("UPDATE products SET name = ?, type = ?, selling_price = ? WHERE id = ? AND user_id = ?");
+        $stmt->execute([$data['name'], $data['type'], $data['selling_price'], $id, $user['id']]);
+        echo json_encode(['success' => true]);
+        break;
+
+    case ($method === 'DELETE' && preg_match('/^sales\/(\d+)$/', $request, $matches)):
+        $user = getAuthUser();
+        if (!$user) { http_response_code(401); exit; }
+        $id = $matches[1];
+        $stmt = $db->prepare("DELETE FROM sales WHERE id = ? AND user_id = ?");
+        $stmt->execute([$id, $user['id']]);
+        echo json_encode(['success' => true]);
+        break;
+
+    case ($method === 'PUT' && preg_match('/^sales\/(\d+)$/', $request, $matches)):
+        $user = getAuthUser();
+        if (!$user) { http_response_code(401); exit; }
+        $id = $matches[1];
+        $data = json_decode(file_get_contents('php://input'), true);
+        $stmt = $db->prepare("UPDATE sales SET product_id = ?, amount = ?, profit = ?, date = ?, renewal_date = ?, status = ? WHERE id = ? AND user_id = ?");
+        $stmt->execute([
+            $data['product_id'], 
+            $data['amount'], 
+            $data['profit'], 
+            $data['date'], 
+            $data['renewal_date'], 
+            $data['status'], 
+            $id, 
+            $user['id']
+        ]);
+        echo json_encode(['success' => true]);
+        break;
+
     case ($request === 'sales' && $method === 'POST'):
         $user = getAuthUser();
         if (!$user) { http_response_code(401); exit; }
@@ -446,8 +504,15 @@ switch (true) {
         if ($success) {
             echo json_encode(['success' => true]);
         } else {
+            $lastError = error_get_last();
+            $errorMsg = 'Failed to send test email. ';
+            if ($lastError) {
+                $errorMsg .= $lastError['message'];
+            } else {
+                $errorMsg .= 'Check your server mail configuration or SMTP settings.';
+            }
             http_response_code(500);
-            echo json_encode(['error' => 'Failed to send test email. Check your SMTP settings and server mail configuration.']);
+            echo json_encode(['error' => $errorMsg]);
         }
         break;
 
@@ -801,4 +866,3 @@ switch (true) {
         echo json_encode(['error' => 'API Endpoint not found or method not allowed']);
         break;
 }
-?>

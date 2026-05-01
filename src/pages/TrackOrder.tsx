@@ -16,7 +16,7 @@ export default function TrackOrder() {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await fetch(`/api/public/track?email=${encodeURIComponent(email)}`);
+      const res = await fetch(`/api/public/track?email=${encodeURIComponent(email.trim())}`);
       const data = await res.json();
       if (Array.isArray(data)) {
         setOrders(data);
@@ -72,12 +72,12 @@ export default function TrackOrder() {
             {logoUrl ? (
               <img src={logoUrl} alt={siteName} className="h-8 sm:h-10 w-auto object-contain" />
             ) : (
-              <>
+              <div className="flex items-center gap-2 sm:gap-3">
                 <div className="w-8 h-8 sm:w-10 sm:h-10 bg-purple-600 rounded-lg sm:rounded-xl flex items-center justify-center text-white font-bold text-sm sm:text-xl">
                   {siteName?.[0] || 'D'}
                 </div>
                 <span className="font-bold text-base sm:text-xl tracking-tight text-zinc-900">{siteName}</span>
-              </>
+              </div>
             )}
           </div>
         </div>

@@ -80,10 +80,10 @@ export default function Landing() {
   }
 
   return (
-    <div className="lg:h-screen lg:overflow-hidden bg-white flex flex-col">
+    <div className="lg:h-screen lg:overflow-hidden bg-white flex flex-col selection:bg-purple-100">
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-md sticky top-0 z-50 border-b border-zinc-100 flex-shrink-0">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 h-16 lg:h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {logoUrl ? (
               <img src={logoUrl} alt={siteName} className="h-10 w-auto object-contain" />
@@ -114,7 +114,7 @@ export default function Landing() {
       </header>
 
       {/* Hero */}
-      <section className="flex-grow flex items-center py-12 lg:py-0 px-6 overflow-y-auto lg:overflow-hidden">
+      <section className="flex-grow flex items-center py-12 lg:py-0 px-6 overflow-y-auto lg:overflow-hidden lg:max-h-[calc(100vh-5rem)]">
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
           <div className="space-y-8">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-50 text-purple-600 rounded-full text-sm font-bold tracking-wide uppercase">

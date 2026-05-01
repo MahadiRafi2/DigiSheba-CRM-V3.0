@@ -10,7 +10,7 @@ define('JWT_SECRET', 'super-secret-key');
 
 // Error Reporting (Prod-এ off রাখবেন)
 error_reporting(E_ALL);
-ini_set('display_errors', 1);
+ini_set('display_errors', 0); // Disable display errors to prevent JSON corruption
 
 function getDB() {
     try {
@@ -19,7 +19,7 @@ function getDB() {
         $db->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
         return $db;
     } catch (PDOException $e) {
+        http_response_code(500);
         die(json_encode(['error' => 'Connection failed: ' . $e->getMessage()]));
     }
 }
-?>
