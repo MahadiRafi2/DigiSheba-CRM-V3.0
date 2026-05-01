@@ -256,11 +256,41 @@ async function startServer() {
   // API routes
   app.get("/api/health", async (req, res) => {
     try {
-      const [rows]: any = await pool.query("SELECT COUNT(*) as count FROM users");
-      res.json({ status: "ok", usersCount: rows[0].count, db: process.env.DB_NAME || 'digisheba_db' });
+      const startTime = Date.now();
+      await pool.query("SELECT 1");
+      const latency = Date.now() - startTime;
+      res.json({ status: "ok", latency: `${latency}ms`, database: "connected" });
     } catch (err: any) {
-      res.status(500).json({ status: "error", error: err.message });
+      console.error("Health Check Failed:", err);
+      res.status(500).json({ status: "error", error: err.message, database: "disconnected" || "N/A" });
     }
+  });
+
+  app.get("/api/db-status", async (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    try {
+      const startTime = Date.now();
+      await pool.query("SELECT 1");
+      const latency = Date.now() - startTime;
+      res.json({ 
+        status: "connected", 
+        latency: `${latency}ms`, 
+        timestamp: new Date().toISOString()
+      });
+    } catch (err: any) {
+      console.error("DB Status Check Failed:", err);
+      res.status(500).json({ 
+        status: "disconnected", 
+        error: err.message, 
+        timestamp: new Date().toISOString() 
+      });
+    }
+  });
+
+  // Catch-all for /api routes that don't exist
+  app.all("/api/*", (req, res, next) => {
+    // If we've reached here, it might be an unhandled route or a valid one below
+    next();
   });
 
   // Auth Middleware
@@ -276,6 +306,27 @@ async function startServer() {
     }
   };
 
+  // Helper for SMTP Transport
+  const getTransporter = (smtp: any) => {
+    if (!smtp || !smtp.host) return null;
+    const options: any = {
+      host: (smtp.host || "").trim(),
+      port: parseInt(smtp.port || "587"),
+      secure: smtp.secure === 1 || smtp.secure === true || smtp.secure === "1" || smtp.secure === "true",
+      auth: { user: (smtp.user || "").trim(), pass: (smtp.pass || "").trim() },
+      tls: { rejectUnauthorized: false },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
+      debug: true,
+      logger: true
+    };
+    if (options.host.toLowerCase().includes('gmail')) {
+      options.service = 'gmail';
+    }
+    return nodemailer.createTransport(options);
+  };
+
   // Auth Routes
   app.post("/api/auth/register", async (req, res) => {
     const { email, password, name } = req.body;
@@ -287,31 +338,6 @@ async function startServer() {
       res.json({ token, user: { id: userId, email, name } });
     } catch (err) {
       res.status(400).json({ error: "Email already exists" });
-    }
-  });
-
-  app.get("/api/db-status", async (req, res) => {
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    try {
-      const startTime = Date.now();
-      // Ensure the pool is connected and can run a query
-      await pool.query("SELECT 1");
-      const latency = Date.now() - startTime;
-      res.json({ 
-        status: "connected", 
-        latency: `${latency}ms`, 
-        timestamp: new Date().toISOString(),
-        host: process.env.DB_HOST || 'localhost' 
-      });
-    } catch (err: any) {
-      console.error("DB Status Check Error:", err);
-      res.status(500).json({ 
-        status: "disconnected", 
-        error: err.message, 
-        code: err.code,
-        timestamp: new Date().toISOString() 
-      });
     }
   });
 
@@ -750,12 +776,7 @@ async function startServer() {
     if (customers.length === 0) return res.json({ success: true, count: 0 });
 
     try {
-      const transporter = nodemailer.createTransport({
-        host: smtp.host,
-        port: smtp.port,
-        secure: smtp.secure === 1,
-        auth: { user: smtp.user, pass: smtp.pass },
-      });
+      const transporter = getTransporter(smtp);
 
       let count = 0;
       for (const customer of customers as any[]) {
@@ -792,12 +813,7 @@ async function startServer() {
     if (!smtp) return res.status(400).json({ error: "SMTP settings not configured" });
 
     try {
-      const transporter = nodemailer.createTransport({
-        host: smtp.host,
-        port: smtp.port,
-        secure: smtp.secure === 1,
-        auth: { user: smtp.user, pass: smtp.pass },
-      });
+      const transporter = getTransporter(smtp);
 
       let count = 0;
       for (const email of emails) {
@@ -1095,29 +1111,9 @@ async function startServer() {
       const [smtpRows]: any = await pool.query("SELECT * FROM smtp_settings WHERE user_id = ?", [userId]);
       const smtp = smtpRows[0];
 
+      const transporter = getTransporter(smtp);
+
       if (settings && smtp && (status === 'Approved' || status === 'Rejected')) {
-        const subject = status === 'Approved' 
-          ? (settings.approval_email_subject || "Canva Pro Renewal Approved") 
-          : (settings.rejection_email_subject || "Canva Pro Renewal Rejected");
-        
-        let body = status === 'Approved'
-          ? (settings.approval_email_template || "Hi {name}, your Canva renewal for {package} has been approved.")
-          : (settings.rejection_email_template || "Hi {name}, your Canva renewal for {package} has been rejected.");
-
-        body = body
-          .replace(/{name}/g, order.name || '')
-          .replace(/{phone}/g, order.phone || '')
-          .replace(/{email}/g, order.email || '')
-          .replace(/{package}/g, order.package_name || '')
-          .replace(/{price}/g, (order.price || 0).toString())
-          .replace(/{transaction_id}/g, order.transaction_id || '');
-
-        const transporter = nodemailer.createTransport({
-          host: smtp.host,
-          port: parseInt(smtp.port),
-          secure: smtp.secure === 1,
-          auth: { user: smtp.user, pass: smtp.pass },
-        });
 
         transporter.sendMail({
           from: `"${smtp.from_name || 'Canva Renewal'}" <${smtp.from_email || smtp.user}>`,
@@ -1321,7 +1317,7 @@ async function startServer() {
 
   app.post("/api/settings/smtp/test", authenticate, async (req: any, res) => {
     const { host, port, user, pass, from_email, from_name, secure, email } = req.body;
-    console.log("SMTP Test - Request Received");
+    console.log("SMTP TEST: Received request for host:", host);
     
     let transporter: any = null;
     try {
@@ -1329,49 +1325,42 @@ async function startServer() {
         return res.status(400).json({ error: "Missing required SMTP parameters" });
       }
 
-      const transportOptions: any = {
-        host: host.trim(),
-        port: parseInt(port as string),
-        secure: secure === 1 || secure === true || secure === "1" || secure === "true",
-        auth: { user: user.trim(), pass: pass.trim() },
-        tls: { rejectUnauthorized: false },
-        connectionTimeout: 10000, // 10 seconds
-        greetingTimeout: 10000,
-        socketTimeout: 15000,
-      };
-
-      if (host.toLowerCase().includes('gmail')) {
-        transportOptions.service = 'gmail';
+      transporter = getTransporter({ host, port, user, pass, secure });
+      
+      if (!transporter) {
+        return res.status(400).json({ error: "Invalid transporter configuration" });
       }
 
-      transporter = nodemailer.createTransport(transportOptions);
-
-      console.log("SMTP Test - Verifying Connection...");
-      await transporter.verify();
+      console.log("SMTP TEST: Verifying connection...");
       
-      console.log("SMTP Test - Connection OK. Sending Email...");
+      // Use a timeout to prevent hanging forever
+      await Promise.race([
+        transporter.verify(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("SMTP Verification Timed out")), 12000))
+      ]);
+      
+      console.log("SMTP TEST: Connection OK. Sending email...");
       await transporter.sendMail({
         from: `"${from_name || 'SMTP Test'}" <${from_email || user}>`,
         to: (email || user).trim(),
-        subject: "SMTP Connection Test Success",
-        text: "Congratulations! Your SMTP settings are working perfectly.",
-        html: "<b>Congratulations!</b><p>Your SMTP settings are working perfectly. This is a test email sent from your CRM system.</p>",
+        subject: "SMTP Connection Test Result",
+        text: "Your SMTP configuration is working correctly!",
+        html: "<b>Success!</b><p>Your SMTP settings are working correctly.</p>",
       });
 
-      console.log("SMTP Test - Completed Successfully");
+      console.log("SMTP TEST: Success.");
       return res.json({ success: true, message: "Test email sent successfully!" });
 
     } catch (err: any) {
-      console.error("SMTP TEST CATASTROPHIC ERROR:", err);
-      // Ensure we always return JSON
+      console.error("SMTP TEST FAILED:", err);
       return res.status(500).json({ 
         error: "SMTP test failed", 
-        details: err.message || "Unknown error occurred",
+        details: err.message || "Unknown error",
         code: err.code || "N/A"
       });
     } finally {
       if (transporter && typeof transporter.close === 'function') {
-        transporter.close();
+        try { transporter.close(); } catch (e) {}
       }
     }
   });
@@ -1427,13 +1416,7 @@ async function startServer() {
                                        .replace(/{{renewal_date}}/g, sale.renewal_date);
 
     try {
-      const transporter = nodemailer.createTransport({
-        host: smtp.host,
-        port: smtp.port,
-        secure: smtp.secure === 1,
-        auth: { user: smtp.user, pass: smtp.pass },
-      });
-
+      const transporter = getTransporter(smtp);
       await transporter.sendMail({
         from: `"${smtp.from_name}" <${smtp.from_email || smtp.user}>`,
         to: sale.customer_email,
@@ -1449,20 +1432,6 @@ async function startServer() {
     }
   });
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(__dirname, "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => res.sendFile(path.join(distPath, "index.html")));
-  }
-
-  const PORT = 3000;
   app.get("/api/settings/renewal-emails", authenticate, async (req: any, res) => {
     const [rows]: any = await pool.query("SELECT * FROM renewal_email_settings WHERE user_id = ?", [req.user.id]);
     res.json(rows[0] || {
@@ -1490,6 +1459,30 @@ async function startServer() {
     `, [req.user.id, day30_subject, day30_body, day15_subject, day15_body, expired_subject, expired_body]);
     res.json({ success: true });
   });
+
+  // Global Error Handler
+  app.use((err: any, req: any, res: any, next: any) => {
+    console.error("GLOBAL SERVER ERROR:", err);
+    res.status(500).json({ 
+      error: "Critical Server Error", 
+      details: err.message || "Check server logs" 
+    });
+  });
+
+  // Vite middleware for development
+  if (process.env.NODE_ENV !== "production") {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(__dirname, "dist");
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => res.sendFile(path.join(distPath, "index.html")));
+  }
+
+  const PORT = 3000;
 
   // Background task for renewal notifications
   const checkRenewals = async () => {
@@ -1527,12 +1520,7 @@ async function startServer() {
         const settings = settRows[0];
 
         if (smtp && settings) {
-          const transporter = nodemailer.createTransport({
-            host: smtp.host,
-            port: parseInt(smtp.port),
-            secure: smtp.secure === 1,
-            auth: { user: smtp.user, pass: smtp.pass },
-          });
+          const transporter = getTransporter(smtp);
 
           const subjectTemplate = settings[`${type}_subject`];
           const bodyTemplate = settings[`${type}_body`];

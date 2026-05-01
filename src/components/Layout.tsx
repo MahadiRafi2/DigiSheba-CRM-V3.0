@@ -33,19 +33,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuthStore();
   const { siteName, adminLogoUrl } = useBrandingStore();
   const [dbStatus, setDbStatus] = React.useState<'loading' | 'connected' | 'disconnected'>('loading');
+  const [dbError, setDbError] = React.useState<string | null>(null);
 
   const checkDbStatus = async () => {
     try {
       // Add cache buster to prevent stale results
       const res = await fetch(`/api/db-status?t=${Date.now()}`);
-      if (!res.ok) {
-        throw new Error('Server response not OK');
-      }
       const data = await res.json();
-      setDbStatus(data.status === 'connected' ? 'connected' : 'disconnected');
-    } catch (err) {
+      if (data.status === 'connected') {
+        setDbStatus('connected');
+        setDbError(null);
+      } else {
+        setDbStatus('disconnected');
+        setDbError(data.error || 'Connection failure');
+      }
+    } catch (err: any) {
       console.error('DB Health Check Failed:', err);
       setDbStatus('disconnected');
+      setDbError(err.message || 'Network error');
     }
   };
 
@@ -150,7 +155,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </button>
           <div className="flex-1" />
           <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-50 border border-zinc-100">
+            <div className="group relative flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-50 border border-zinc-100">
               <div className={cn(
                 "w-2 h-2 rounded-full",
                 dbStatus === 'connected' ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : 
@@ -163,8 +168,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 dbStatus === 'disconnected' ? "text-red-600" : 
                 "text-zinc-400"
               )}>
-                Database: {dbStatus}
+                Database: {dbStatus === 'connected' ? 'Connected' : 'Disconnected'}
               </span>
+              {dbStatus === 'disconnected' && dbError && (
+                <div className="absolute top-full left-0 mt-2 p-2 bg-red-600 text-white text-[10px] rounded shadow-xl whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+                  Error: {dbError}
+                </div>
+              )}
               <button 
                 onClick={(e) => {
                   e.stopPropagation();
