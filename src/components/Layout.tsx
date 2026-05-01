@@ -36,10 +36,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const checkDbStatus = async () => {
     try {
-      const res = await fetch('/api/db-status');
+      // Add cache buster to prevent stale results
+      const res = await fetch(`/api/db-status?t=${Date.now()}`);
+      if (!res.ok) {
+        throw new Error('Server response not OK');
+      }
       const data = await res.json();
       setDbStatus(data.status === 'connected' ? 'connected' : 'disconnected');
     } catch (err) {
+      console.error('DB Health Check Failed:', err);
       setDbStatus('disconnected');
     }
   };

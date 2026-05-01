@@ -291,9 +291,12 @@ async function startServer() {
   });
 
   app.get("/api/db-status", async (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     try {
+      const startTime = Date.now();
       await pool.query("SELECT 1");
-      res.json({ status: "connected" });
+      const latency = Date.now() - startTime;
+      res.json({ status: "connected", latency: `${latency}ms` });
     } catch (err: any) {
       console.error("DB Status Check Error:", err);
       res.status(500).json({ status: "disconnected", error: err.message });
