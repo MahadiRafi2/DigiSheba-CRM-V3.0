@@ -1290,17 +1290,29 @@ async function startServer() {
 
   app.post("/api/settings/smtp/test", authenticate, async (req: any, res) => {
     const { host, port, user, pass, from_email, from_name, secure, email } = req.body;
+    console.log("SMTP Test Request Body:", { host, port, user, pass: pass ? '***' : null, from_email, from_name, secure, email });
     
     try {
+      if (!host || !port || !user || !pass) {
+        return res.status(400).json({ error: "Missing required SMTP parameters" });
+      }
+
       const transporter = nodemailer.createTransport({
         host,
-        port: parseInt(port),
-        secure: secure === 1 || secure === true,
+        port: parseInt(port as string),
+        secure: secure === 1 || secure === true || secure === "1" || secure === "true",
         auth: { user, pass },
+        // Add timeout to prevent hanging
+        connectTimeout: 10000,
+        greetingTimeout: 5000,
+        socketTimeout: 10000,
       });
 
+      console.log("Verifying SMTP connection...");
       await transporter.verify();
+      console.log("SMTP connection verified successfully.");
       
+      console.log("Sending test email to:", email || user);
       await transporter.sendMail({
         from: `"${from_name || 'SMTP Test'}" <${from_email || user}>`,
         to: email || user,
@@ -1308,11 +1320,17 @@ async function startServer() {
         text: "Your SMTP settings are working correctly!",
         html: "<b>Your SMTP settings are working correctly!</b>",
       });
+      console.log("Test email sent.");
 
       res.json({ success: true, message: "Test email sent successfully!" });
     } catch (err: any) {
-      console.error("SMTP Test Error:", err);
-      res.status(500).json({ error: "SMTP test failed", details: err.message });
+      console.error("SMTP Test Error Details:", err);
+      res.status(500).json({ 
+        error: "SMTP test failed", 
+        details: err.message,
+        code: err.code,
+        command: err.command
+      });
     }
   });
 

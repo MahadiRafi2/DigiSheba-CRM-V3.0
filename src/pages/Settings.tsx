@@ -232,16 +232,16 @@ export default function Settings() {
         if (res.ok) {
           alert('Test email sent successfully! Please check your inbox.');
         } else {
-          alert(data.error || 'Failed to send test email.');
+          alert(`SMTP Error: ${data.error || 'Failed to send'}\nDetails: ${data.details || 'No details provided'}`);
         }
       } else {
         const text = await res.text();
-        console.error("Non-JSON Response:", text);
-        alert(`Server Error: ${text.substring(0, 100)}${text.length > 100 ? '...' : ''}`);
+        console.error("Non-JSON Response Payload:", text);
+        alert(`Server returned non-JSON error (${res.status}): ${text.substring(0, 500)}`);
       }
-    } catch (err) {
-      console.error("SMTP Test Error:", err);
-      alert('An error occurred while testing SMTP. Please check the browser console for more details.');
+    } catch (err: any) {
+      console.error("Fetch/JSON Error:", err);
+      alert(`Connection Error: ${err.message}`);
     }
     setTestingSmtp(false);
   };
