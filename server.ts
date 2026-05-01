@@ -18,7 +18,7 @@ import pool, { initDB } from "./db";
 
 async function initializeDatabase() {
   try {
-    console.log("Ensuring database exists...");
+    console.log("Ensuring database exists at:", process.env.DB_HOST || 'localhost');
     await initDB();
     console.log("Database ensured. Creating tables...");
     await pool.query(`
@@ -287,6 +287,16 @@ async function startServer() {
       res.json({ token, user: { id: userId, email, name } });
     } catch (err) {
       res.status(400).json({ error: "Email already exists" });
+    }
+  });
+
+  app.get("/api/db-status", async (req, res) => {
+    try {
+      await pool.query("SELECT 1");
+      res.json({ status: "connected" });
+    } catch (err: any) {
+      console.error("DB Status Check Error:", err);
+      res.status(500).json({ status: "disconnected", error: err.message });
     }
   });
 

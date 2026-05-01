@@ -14,7 +14,8 @@ import {
   Menu,
   X,
   RefreshCw,
-  Zap
+  Zap,
+  Database
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useBrandingStore } from '../store/brandingStore';
@@ -31,6 +32,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const { siteName, adminLogoUrl } = useBrandingStore();
+  const [dbStatus, setDbStatus] = React.useState<'loading' | 'connected' | 'disconnected'>('loading');
+
+  const checkDbStatus = async () => {
+    try {
+      const res = await fetch('/api/db-status');
+      const data = await res.json();
+      setDbStatus(data.status === 'connected' ? 'connected' : 'disconnected');
+    } catch (err) {
+      setDbStatus('disconnected');
+    }
+  };
+
+  React.useEffect(() => {
+    checkDbStatus();
+    const interval = setInterval(checkDbStatus, 30000); // Check every 30 seconds
+    return () => clearInterval(interval);
+  }, []);
 
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/admin' },
@@ -126,7 +144,29 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Menu size={24} />
           </button>
           <div className="flex-1" />
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-50 border border-zinc-100">
+              <div className={cn(
+                "w-2 h-2 rounded-full",
+                dbStatus === 'connected' ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : 
+                dbStatus === 'disconnected' ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)] animate-pulse" : 
+                "bg-zinc-300"
+              )} />
+              <span className={cn(
+                "text-[10px] font-bold uppercase tracking-widest",
+                dbStatus === 'connected' ? "text-emerald-600" : 
+                dbStatus === 'disconnected' ? "text-red-600" : 
+                "text-zinc-400"
+              )}>
+                Database: {dbStatus}
+              </span>
+              <Database size={12} className={cn(
+                dbStatus === 'connected' ? "text-emerald-500" : 
+                dbStatus === 'disconnected' ? "text-red-500" : 
+                "text-zinc-400"
+              )} />
+            </div>
+
             <button className="p-2 text-zinc-500 hover:text-zinc-900 transition-colors">
               <Settings size={20} />
             </button>
